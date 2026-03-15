@@ -76,7 +76,7 @@ const [interviews, setInterviews] = useState<Interview[]>([])
           {[
             { label: "Total Interviews", value: interviews.length, icon: "🎯" },
             { label: "Completed", value: interviews.filter((i) => i.status === "completed").length, icon: "✅" },
-            { label: "Avg Score", value: interviews.length ? Math.round(interviews.filter(i => i.score).reduce((a, b) => a + b.score, 0) / (interviews.filter(i => i.score).length || 1)) + "/10" : "N/A", icon: "📊" },
+            { label: "Avg Score", value: interviews.length ? Math.round(interviews.filter(i => i.score).reduce((a, b) => a + (b.score ?? 0), 0) / (interviews.filter(i => i.score).length || 1)) + "/10" : "N/A", icon: "📊" },
           ].map((stat) => (
             <div key={stat.label} style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "24px" }}>
               <div style={{ fontSize: "28px", marginBottom: "8px" }}>{stat.icon}</div>
