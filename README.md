@@ -1,36 +1,234 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🤖 AI Interview Prep — AI-Powered Interview Preparation Platform
 
-## Getting Started
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20Site-blue?style=for-the-badge)](https://ai-interview-prep-inky-sigma.vercel.app)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=for-the-badge&logo=typescript)](https://typescriptlang.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon-green?style=for-the-badge&logo=postgresql)](https://neon.tech)
+[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com)
 
-First, run the development server:
+> A full-stack SaaS platform where developers can practice technical interviews with an AI interviewer, receive real-time feedback, upload their resume for personalized questions, and track their performance over time.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## 🌐 Live Demo
+
+**[https://ai-interview-prep-inky-sigma.vercel.app](https://ai-interview-prep-inky-sigma.vercel.app)**
+
+---
+
+## ✨ Features
+
+- 🔐 **Authentication** — Secure email/password login and registration with NextAuth.js v5
+- 🤖 **AI Interviewer** — AI generates role-specific technical interview questions using Groq (LLaMA 3.1)
+- 📝 **Answer Evaluation** — Every answer is evaluated with a score out of 10, strengths, and improvement areas
+- 📄 **Resume Upload** — Upload your PDF resume to get personalized questions based on your experience
+- 📋 **Interview History** — Review all past interviews, questions, answers, and feedback
+- 📊 **Analytics Dashboard** — Visual charts showing score trends, performance by role and difficulty
+- 🎯 **Role-Specific Questions** — Frontend, Backend, Full Stack, DevOps, Data Science, and more
+- 📈 **Progress Tracking** — Track improvement across multiple interview sessions
+
+---
+
+## 🛠️ Tech Stack
+
+| Category | Technology |
+|---|---|
+| **Framework** | Next.js 16 (App Router) |
+| **Language** | TypeScript |
+| **Database** | PostgreSQL (Neon) |
+| **ORM** | Prisma |
+| **Authentication** | NextAuth.js v5 |
+| **AI / LLM** | Groq API (LLaMA 3.1 8B) |
+| **Styling** | Tailwind CSS v4 + Inline Styles |
+| **PDF Parsing** | unpdf |
+| **Deployment** | Vercel |
+
+---
+
+## 📸 Screenshots
+
+### Landing Page
+![Landing Page](https://via.placeholder.com/800x450/0a0a0a/60a5fa?text=Landing+Page)
+
+### Interview Room
+![Interview Room](https://via.placeholder.com/800x450/0a0a0a/60a5fa?text=Interview+Room)
+
+### Analytics Dashboard
+![Analytics](https://via.placeholder.com/800x450/0a0a0a/60a5fa?text=Analytics+Dashboard)
+
+---
+
+## 🗄️ Database Schema
+
+```
+User
+ ├── id, name, email, password
+ ├── Interviews[]
+ └── Resumes[]
+
+Interview
+ ├── id, role, difficulty, status
+ ├── score, feedback
+ ├── createdAt, completedAt
+ └── Questions[]
+
+Question
+ ├── id, content, answer
+ ├── score, feedback
+ └── order
+
+Resume
+ ├── id, filename
+ └── content (parsed text)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🚀 Getting Started Locally
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Prerequisites
+- Node.js 18+
+- PostgreSQL database (or free [Neon](https://neon.tech) account)
+- [Groq API key](https://console.groq.com) (free)
 
-## Learn More
+### Installation
 
-To learn more about Next.js, take a look at the following resources:
+**1. Clone the repository**
+```bash
+git clone https://github.com/msdianprince-7/Ai-Interview-Prep.git
+cd Ai-Interview-Prep
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**2. Install dependencies**
+```bash
+npm install
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**3. Set up environment variables**
 
-## Deploy on Vercel
+Create a `.env` file in the root directory:
+```env
+DATABASE_URL="your_postgresql_connection_string"
+NEXTAUTH_SECRET="your_nextauth_secret"
+NEXTAUTH_URL="http://localhost:3000"
+AUTH_SECRET="your_auth_secret"
+GROQ_API_KEY="your_groq_api_key"
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**4. Run database migrations**
+```bash
+npx prisma migrate dev --name init
+npx prisma generate
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**5. Start the development server**
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## 📁 Project Structure
+
+```
+src/
+├── app/
+│   ├── (auth)/
+│   │   ├── login/          # Login page
+│   │   └── register/       # Register page
+│   ├── (dashboard)/
+│   │   ├── dashboard/      # Main dashboard
+│   │   ├── interview/
+│   │   │   ├── new/        # Start new interview
+│   │   │   └── [id]/       # Active interview room
+│   │   ├── history/        # Interview history
+│   │   ├── analytics/      # Analytics dashboard
+│   │   └── resume/         # Resume upload
+│   ├── api/
+│   │   ├── auth/           # NextAuth routes
+│   │   ├── interview/      # Interview CRUD + AI
+│   │   ├── interviews/     # Interview list
+│   │   ├── register/       # User registration
+│   │   └── resume/         # Resume upload & parse
+│   ├── layout.tsx
+│   └── page.tsx            # Landing page
+├── auth.ts                 # NextAuth configuration
+└── lib/
+    ├── openai.ts           # Groq AI functions
+    └── prisma.ts           # Prisma client
+```
+
+---
+
+## 🔑 Key Implementation Details
+
+### AI Question Generation
+Questions are generated using the Groq API with LLaMA 3.1 8B model. The prompt includes the target role, difficulty level, previously asked questions (to avoid repetition), and resume content for personalization.
+
+### AI Answer Evaluation
+Each answer is evaluated by the AI with strict scoring guidelines — vague or incorrect answers receive low scores (1-2), while well-explained answers with correct concepts receive high scores (8-10).
+
+### Resume Personalization
+PDF resumes are parsed using `unpdf` and the extracted text is sent as context to the AI, which then generates questions relevant to the candidate's actual experience and tech stack.
+
+### Authentication Flow
+Uses NextAuth.js v5 with JWT strategy. Passwords are hashed with bcryptjs before storage. Sessions are validated on every protected API route.
+
+---
+
+## 🌱 Environment Variables
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `NEXTAUTH_SECRET` | Secret for NextAuth session encryption |
+| `NEXTAUTH_URL` | Base URL of your application |
+| `AUTH_SECRET` | Auth.js secret key |
+| `GROQ_API_KEY` | Groq API key for AI features |
+
+---
+
+## 🚢 Deployment
+
+This project is deployed on **Vercel** with a **Neon PostgreSQL** database.
+
+To deploy your own instance:
+1. Fork this repository
+2. Create a Vercel account and import the repo
+3. Add all environment variables in Vercel dashboard
+4. Deploy — Vercel auto-detects Next.js configuration
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the project
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'feat: add AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+---
+
+## 👨‍💻 Author
+
+**msdianprince-7**
+- GitHub: [@msdianprince-7](https://github.com/msdianprince-7)
+- Live Project: [ai-interview-prep-inky-sigma.vercel.app](https://ai-interview-prep-inky-sigma.vercel.app)
+
+---
+
+<div align="center">
+  <p>Built with ❤️ using Next.js, Prisma, NextAuth, and Groq AI</p>
+  <p>⭐ Star this repo if you found it helpful!</p>
+</div>
