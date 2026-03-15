@@ -47,8 +47,6 @@
 
 ## 📸 Screenshots
 
-## 📸 Screenshots
-
 ### Landing Page
 ![Landing Page](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-15%20112000.png)
 
