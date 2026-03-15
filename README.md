@@ -48,13 +48,16 @@
 ## 📸 Screenshots
 
 ### Landing Page
-![Landing Page](https://via.placeholder.com/800x450/0a0a0a/60a5fa?text=Landing+Page)
+![Landing Page](public/screenshots/landing.png)
 
 ### Interview Room
-![Interview Room](https://via.placeholder.com/800x450/0a0a0a/60a5fa?text=Interview+Room)
+![Interview Room](public/screenshots/interview.png)
 
 ### Analytics Dashboard
-![Analytics](https://via.placeholder.com/800x450/0a0a0a/60a5fa?text=Analytics+Dashboard)
+![Analytics](public/screenshots/analytics.png)
+
+### Dashboard
+![Dashboard](public/screenshots/dashboard.png)
 
 ---
 
