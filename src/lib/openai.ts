@@ -5,8 +5,13 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 export async function generateQuestion(
   role: string,
   difficulty: string,
-  previousQuestions: string[]
+  previousQuestions: string[],
+  resumeContent?: string
 ) {
+  const resumeContext = resumeContent
+    ? `The candidate's resume shows: ${resumeContent.slice(0, 500)}. Ask questions relevant to their experience.`
+    : ""
+
   const response = await groq.chat.completions.create({
     model: "llama-3.1-8b-instant",
     messages: [
@@ -14,6 +19,7 @@ export async function generateQuestion(
         role: "system",
         content: `You are a senior technical interviewer for ${role} positions.
 Ask ONE ${difficulty} difficulty interview question.
+${resumeContext}
 ${previousQuestions.length > 0 ? `Do not repeat these: ${previousQuestions.join(" | ")}` : ""}
 Return only the question text, nothing else.`
       }
@@ -33,16 +39,27 @@ export async function evaluateAnswer(
     messages: [
       {
         role: "system",
-        content: `You are evaluating a ${role} interview answer.
+        content: `You are a strict technical interviewer evaluating a ${role} interview answer.
+Be honest and critical. Do NOT give high scores for vague or incorrect answers.
+
+Scoring guide:
+- 1-2: No answer, completely wrong, or "no idea"
+- 3-4: Very weak, missing key concepts
+- 5-6: Partial understanding, missing important details
+- 7-8: Good answer with minor gaps
+- 9-10: Excellent, complete, well explained
+
 Question: ${question}
 Answer: ${answer}
 
-Return ONLY a JSON object in this exact format with no extra text:
+If the answer is blank, "no idea", "don't know" or clearly wrong, give score 1 or 2.
+
+Return ONLY a JSON object:
 {
   "score": <number 1-10>,
-  "feedback": "<2-3 sentence overall feedback>",
-  "strengths": ["<strength 1>", "<strength 2>"],
-  "improvements": ["<improvement 1>", "<improvement 2>"]
+  "feedback": "<honest 2-3 sentence feedback>",
+  "strengths": ["<only real strengths, if none say 'None demonstrated'>"],
+  "improvements": ["<specific things to study>"]
 }`
       }
     ],
@@ -55,10 +72,10 @@ Return ONLY a JSON object in this exact format with no extra text:
     return JSON.parse(clean)
   } catch {
     return {
-      score: 5,
-      feedback: "Answer received and evaluated.",
-      strengths: ["Attempted the question"],
-      improvements: ["Provide more detail"]
+      score: 1,
+      feedback: "Could not evaluate answer.",
+      strengths: ["None demonstrated"],
+      improvements: ["Please provide a real answer"]
     }
   }
 }
