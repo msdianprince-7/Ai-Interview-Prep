@@ -40,6 +40,7 @@
 | **ORM** | Prisma |
 | **Authentication** | NextAuth.js v5 |
 | **AI / LLM** | Groq API (LLaMA 3.1 8B) |
+| **Voice** | Web Speech API + react-speech-recognition |
 | **Styling** | Tailwind CSS v4 + Inline Styles |
 | **PDF Parsing** | unpdf |
 | **Deployment** | Vercel |
@@ -57,6 +58,12 @@
 
 ### Interview Room
 ![Interview Room](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-15%20112717.png)
+
+### Text Mode
+![Text Mode](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-20%20111305.png)
+
+### Voice Mode
+![Voice Mode](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-20%20111425.png)
 
 ### Analytics Dashboard
 ![Analytics](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-15%20112824.png)
