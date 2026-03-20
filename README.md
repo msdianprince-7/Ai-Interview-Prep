@@ -59,10 +59,10 @@
 ### Interview Room
 ![Interview Room](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-15%20112717.png)
 
-### Text Mode
+### Voice Mode
 ![Text Mode](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-20%20111305.png)
 
-### Voice Mode
+### Text Mode
 ![Voice Mode](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-20%20111425.png)
 
 ### Analytics Dashboard
