@@ -47,18 +47,18 @@
 
 ## 📸 Screenshots
 
+
 ### Landing Page
-![Landing Page](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/landing.png)
-
-### Interview Room
-![Interview Room](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/interview.png)
-
-### Analytics Dashboard
-![Analytics](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/analytics.png)
+![Landing Page](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-15%20112000.png)
 
 ### Dashboard
-![Dashboard](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/dashboard.png)
+![Dashboard](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-15%20112421.png)
 
+### Interview Room
+![Interview Room](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-15%20112717.png)
+
+### Analytics Dashboard
+![Analytics](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-15%20112824.png)
 ## 🗄️ Database Schema
 
 ```
