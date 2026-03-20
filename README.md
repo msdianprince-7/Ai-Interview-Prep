@@ -20,6 +20,7 @@
 
 - 🔐 **Authentication** — Secure email/password login and registration with NextAuth.js v5
 - 🤖 **AI Interviewer** — AI generates role-specific technical interview questions using Groq (LLaMA 3.1)
+- 🎤 **Voice Interview Mode** — Speak your answers using Web Speech API with real-time transcription and AI text-to-speech questions
 - 📝 **Answer Evaluation** — Every answer is evaluated with a score out of 10, strengths, and improvement areas
 - 📄 **Resume Upload** — Upload your PDF resume to get personalized questions based on your experience
 - 📋 **Interview History** — Review all past interviews, questions, answers, and feedback
