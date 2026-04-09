@@ -6,7 +6,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon-green?style=for-the-badge&logo=postgresql)](https://neon.tech)
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com)
 
-> A full-stack SaaS platform where developers can practice technical interviews with an AI interviewer, receive real-time feedback, upload their resume for personalized questions, and track their performance over time.
+> A full-stack SaaS platform where developers can practice technical interviews with an AI interviewer, receive real-time feedback, upload their resume for personalized questions, and track their performance.
 
 ---
 
