@@ -6,7 +6,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon-green?style=for-the-badge&logo=postgresql)](https://neon.tech)
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com)
 
-> A full-stack SaaS platform where developers can practice technical interviews with an AI interviewer, receive real-time feedback, upload their resume for personalized questions, and track their performance over time.
+> A full-stack SaaS platform where developers can practice technical interviews with an AI interviewer, receive real-time feedback, upload their resume for personalized questions, and track their performance.
 
 ---
 
@@ -20,6 +20,7 @@
 
 - 🔐 **Authentication** — Secure email/password login and registration with NextAuth.js v5
 - 🤖 **AI Interviewer** — AI generates role-specific technical interview questions using Groq (LLaMA 3.1)
+- 🎤 **Voice Interview Mode** — Speak your answers using Web Speech API with real-time transcription and AI text-to-speech questions
 - 📝 **Answer Evaluation** — Every answer is evaluated with a score out of 10, strengths, and improvement areas
 - 📄 **Resume Upload** — Upload your PDF resume to get personalized questions based on your experience
 - 📋 **Interview History** — Review all past interviews, questions, answers, and feedback
@@ -39,6 +40,7 @@
 | **ORM** | Prisma |
 | **Authentication** | NextAuth.js v5 |
 | **AI / LLM** | Groq API (LLaMA 3.1 8B) |
+| **Voice** | Web Speech API + react-speech-recognition |
 | **Styling** | Tailwind CSS v4 + Inline Styles |
 | **PDF Parsing** | unpdf |
 | **Deployment** | Vercel |
@@ -56,6 +58,12 @@
 
 ### Interview Room
 ![Interview Room](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-15%20112717.png)
+
+### Voice Mode
+![Text Mode](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-20%20111305.png)
+
+### Text Mode
+![Voice Mode](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-20%20111425.png)
 
 ### Analytics Dashboard
 ![Analytics](https://raw.githubusercontent.com/msdianprince-7/Ai-Interview-Prep/master/public/screenshots/Screenshot%202026-03-15%20112824.png)
