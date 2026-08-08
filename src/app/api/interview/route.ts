@@ -4,6 +4,7 @@ import { generateQuestion } from "@/lib/openai"
 import {
   badRequest,
   getCurrentUser,
+  getResumeContent,
   serverError,
   tooManyRequests,
   unauthorized,
@@ -23,7 +24,15 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) return badRequest(firstError(parsed.error))
     const { role, difficulty } = parsed.data
 
-    const firstQuestion = await generateQuestion(role, difficulty, [])
+    // Personalises the interview when the user has uploaded a resume.
+    const resumeContent = await getResumeContent(user.id)
+
+    const firstQuestion = await generateQuestion(
+      role,
+      difficulty,
+      [],
+      resumeContent
+    )
 
     if (!firstQuestion) {
       return serverError(
@@ -49,6 +58,7 @@ export async function POST(req: NextRequest) {
       interviewId: interview.id,
       question: firstQuestion,
       questionId: interview.questions[0].id,
+      personalized: Boolean(resumeContent),
     })
   } catch (error) {
     return serverError("POST /api/interview", error)

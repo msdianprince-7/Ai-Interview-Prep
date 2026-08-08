@@ -4,6 +4,7 @@ import { generateQuestion, evaluateAnswer } from "@/lib/openai"
 import {
   badRequest,
   getCurrentUser,
+  getResumeContent,
   notFound,
   serverError,
   tooManyRequests,
@@ -106,11 +107,15 @@ export async function POST(
       })
     }
 
+    // Every question in the session is personalised, not just the first.
+    const resumeContent = await getResumeContent(user.id)
+
     const previousQuestions = interview.questions.map((q) => q.content)
     const nextQuestion = await generateQuestion(
       interview.role,
       interview.difficulty,
-      previousQuestions
+      previousQuestions,
+      resumeContent
     )
 
     if (!nextQuestion) {

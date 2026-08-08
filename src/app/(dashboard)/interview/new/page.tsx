@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
 const roles = [
@@ -22,6 +22,16 @@ export default function NewInterviewPage() {
   const [difficulty, setDifficulty] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [resumeFilename, setResumeFilename] = useState<string | null>(null)
+
+  // Questions are generated from the stored resume when one exists, so the
+  // page reports which mode the interview will run in.
+  useEffect(() => {
+    fetch("/api/resume")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setResumeFilename(data?.resume?.filename ?? null))
+      .catch(() => setResumeFilename(null))
+  }, [])
 
   const handleStart = async () => {
   if (!role || !difficulty) {
@@ -80,6 +90,38 @@ export default function NewInterviewPage() {
           {error && (
             <div style={{ background: "#2d1515", border: "1px solid #ef4444", color: "#ef4444", padding: "12px", borderRadius: "8px", marginBottom: "24px", fontSize: "14px" }}>
               {error}
+            </div>
+          )}
+
+          {/* Resume status */}
+          {resumeFilename ? (
+            <div style={{ background: "#0f2a0f", border: "1px solid #22c55e", borderRadius: "8px", padding: "14px 16px", marginBottom: "24px", display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{ fontSize: "20px" }}>📄</div>
+              <div>
+                <div style={{ color: "#86efac", fontSize: "14px", fontWeight: "600" }}>
+                  Personalized from your resume
+                </div>
+                <div style={{ color: "#888", fontSize: "12px", marginTop: "2px" }}>
+                  Questions will reference {resumeFilename}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: "8px", padding: "14px 16px", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+              <div>
+                <div style={{ color: "#ccc", fontSize: "14px", fontWeight: "600" }}>
+                  Using general questions
+                </div>
+                <div style={{ color: "#888", fontSize: "12px", marginTop: "2px" }}>
+                  Upload a resume to get questions about your own experience
+                </div>
+              </div>
+              <button
+                onClick={() => router.push("/resume")}
+                style={{ padding: "8px 14px", background: "transparent", border: "1px solid #333", color: "#60a5fa", borderRadius: "6px", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap" }}
+              >
+                Upload
+              </button>
             </div>
           )}
 
