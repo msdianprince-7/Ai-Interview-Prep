@@ -23,6 +23,7 @@ export default function NewInterviewPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [resumeFilename, setResumeFilename] = useState<string | null>(null)
+  const [useResume, setUseResume] = useState(true)
 
   // Questions are generated from the stored resume when one exists, so the
   // page reports which mode the interview will run in.
@@ -46,7 +47,8 @@ export default function NewInterviewPage() {
     const res = await fetch("/api/interview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, difficulty })
+      // Only meaningful when a resume exists; the server ignores it otherwise.
+      body: JSON.stringify({ role, difficulty, useResume })
     })
 
     const text = await res.text()
@@ -95,17 +97,61 @@ export default function NewInterviewPage() {
 
           {/* Resume status */}
           {resumeFilename ? (
-            <div style={{ background: "#0f2a0f", border: "1px solid #22c55e", borderRadius: "8px", padding: "14px 16px", marginBottom: "24px", display: "flex", alignItems: "center", gap: "12px" }}>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={useResume}
+              onClick={() => setUseResume((prev) => !prev)}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                background: useResume ? "#0f2a0f" : "#1a1a2e",
+                border: `1px solid ${useResume ? "#22c55e" : "#333"}`,
+                borderRadius: "8px",
+                padding: "14px 16px",
+                marginBottom: "24px",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                cursor: "pointer",
+                color: "white",
+              }}
+            >
               <div style={{ fontSize: "20px" }}>📄</div>
-              <div>
-                <div style={{ color: "#86efac", fontSize: "14px", fontWeight: "600" }}>
-                  Personalized from your resume
+              <div style={{ flex: 1 }}>
+                <div style={{ color: useResume ? "#86efac" : "#ccc", fontSize: "14px", fontWeight: "600" }}>
+                  {useResume ? "Personalized from your resume" : "Resume turned off"}
                 </div>
                 <div style={{ color: "#888", fontSize: "12px", marginTop: "2px" }}>
-                  Questions will reference {resumeFilename}
+                  {useResume
+                    ? `Questions will reference ${resumeFilename}`
+                    : "Using general questions for this role"}
                 </div>
               </div>
-            </div>
+              {/* Switch track */}
+              <div
+                style={{
+                  width: "40px",
+                  height: "22px",
+                  borderRadius: "11px",
+                  background: useResume ? "#22c55e" : "#333",
+                  padding: "2px",
+                  flexShrink: 0,
+                  transition: "background 0.2s",
+                }}
+              >
+                <div
+                  style={{
+                    width: "18px",
+                    height: "18px",
+                    borderRadius: "50%",
+                    background: "white",
+                    transform: useResume ? "translateX(18px)" : "translateX(0)",
+                    transition: "transform 0.2s",
+                  }}
+                />
+              </div>
+            </button>
           ) : (
             <div style={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: "8px", padding: "14px 16px", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
               <div>

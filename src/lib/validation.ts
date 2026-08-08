@@ -36,6 +36,9 @@ export const registerSchema = z.object({
 export const createInterviewSchema = z.object({
   role: z.enum(ROLES, { message: "Select a valid role" }),
   difficulty: z.enum(DIFFICULTIES, { message: "Select a valid difficulty" }),
+  // Defaults to true so an older client that omits the field keeps the
+  // existing personalised behaviour.
+  useResume: z.boolean().default(true),
 })
 
 export const submitAnswerSchema = z.object({

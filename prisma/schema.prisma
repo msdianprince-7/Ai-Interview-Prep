@@ -52,6 +52,10 @@ model Interview {
   userId      String
   role        String
   difficulty  String
+  // Whether questions are generated from the candidate's stored resume.
+  // Persisted per interview so follow-up questions honour the choice made at
+  // the start rather than re-deciding on every request.
+  useResume   Boolean   @default(true)
   score       Int?
   feedback    String?   @db.Text
   status      String    @default("in_progress")

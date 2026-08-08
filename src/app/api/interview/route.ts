@@ -22,10 +22,10 @@ export async function POST(req: NextRequest) {
 
     const parsed = createInterviewSchema.safeParse(await req.json())
     if (!parsed.success) return badRequest(firstError(parsed.error))
-    const { role, difficulty } = parsed.data
+    const { role, difficulty, useResume } = parsed.data
 
-    // Personalises the interview when the user has uploaded a resume.
-    const resumeContent = await getResumeContent(user.id)
+    // Personalises the interview when requested and a resume exists.
+    const resumeContent = useResume ? await getResumeContent(user.id) : null
 
     const firstQuestion = await generateQuestion(
       role,
@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
         userId: user.id,
         role,
         difficulty,
+        useResume,
         status: "in_progress",
         questions: { create: { content: firstQuestion, order: 1 } },
       },

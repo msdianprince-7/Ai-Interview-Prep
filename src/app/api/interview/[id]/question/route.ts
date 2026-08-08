@@ -107,8 +107,11 @@ export async function POST(
       })
     }
 
-    // Every question in the session is personalised, not just the first.
-    const resumeContent = await getResumeContent(user.id)
+    // Honours the choice stored when the interview started, so a session that
+    // began as generic stays generic even if a resume is uploaded midway.
+    const resumeContent = interview.useResume
+      ? await getResumeContent(user.id)
+      : null
 
     const previousQuestions = interview.questions.map((q) => q.content)
     const nextQuestion = await generateQuestion(
