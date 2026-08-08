@@ -1,56 +1,56 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { generateQuestion } from "@/lib/openai"
+import {
+  badRequest,
+  getCurrentUser,
+  serverError,
+  tooManyRequests,
+  unauthorized,
+} from "@/lib/api"
+import { rateLimit } from "@/lib/rate-limit"
+import { createInterviewSchema, firstError } from "@/lib/validation"
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth()
+    const user = await getCurrentUser()
+    if (!user) return unauthorized()
 
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const limit = rateLimit(`interview:${user.id}`, 10, 60_000)
+    if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds)
 
-    const body = await req.json()
-    const { role, difficulty } = body
-
-    if (!role || !difficulty) {
-      return NextResponse.json({ error: "Role and difficulty required" }, { status: 400 })
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
-    const interview = await prisma.interview.create({
-      data: { userId: user.id, role, difficulty, status: "in_progress" }
-    })
+    const parsed = createInterviewSchema.safeParse(await req.json())
+    if (!parsed.success) return badRequest(firstError(parsed.error))
+    const { role, difficulty } = parsed.data
 
     const firstQuestion = await generateQuestion(role, difficulty, [])
 
     if (!firstQuestion) {
-      return NextResponse.json({ error: "Failed to generate question" }, { status: 500 })
+      return serverError(
+        "POST /api/interview",
+        new Error("Model returned no question text")
+      )
     }
 
-    const question = await prisma.question.create({
-      data: { interviewId: interview.id, content: firstQuestion, order: 1 }
+    // Created together so a failed generation cannot leave an empty interview
+    // stranded in the user's history.
+    const interview = await prisma.interview.create({
+      data: {
+        userId: user.id,
+        role,
+        difficulty,
+        status: "in_progress",
+        questions: { create: { content: firstQuestion, order: 1 } },
+      },
+      include: { questions: true },
     })
 
     return NextResponse.json({
       interviewId: interview.id,
       question: firstQuestion,
-      questionId: question.id
+      questionId: interview.questions[0].id,
     })
-
-  } catch (error: any) {
-    console.error("Interview creation error:", error)
-    return NextResponse.json(
-      { error: error.message || "Internal server error" },
-      { status: 500 }
-    )
+  } catch (error) {
+    return serverError("POST /api/interview", error)
   }
 }

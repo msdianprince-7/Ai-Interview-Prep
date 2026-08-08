@@ -56,8 +56,8 @@ export default function NewInterviewPage() {
     }
 
     router.push(`/interview/${data.interviewId}`)
-  } catch (err: any) {
-    setError("Something went wrong: " + err.message)
+  } catch (err: unknown) {
+    setError(err instanceof Error ? err.message : "Something went wrong")
     setLoading(false)
   }
 }

@@ -17,8 +17,16 @@ export default function RegisterPage() {
     setLoading(true)
     setError("")
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters")
+    // Mirrors registerSchema in src/lib/validation.ts; the server enforces the
+    // same rules regardless of what happens here.
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters")
+      setLoading(false)
+      return
+    }
+
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      setError("Password must contain at least one letter and one number")
       setLoading(false)
       return
     }
@@ -96,7 +104,7 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                placeholder="Min 6 characters"
+                placeholder="Min 8 characters, letters and numbers"
                 style={{ width: "100%", padding: "10px 12px", background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "white", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
               />
             </div>

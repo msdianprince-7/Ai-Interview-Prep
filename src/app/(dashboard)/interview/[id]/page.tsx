@@ -4,6 +4,22 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition"
 
+interface Evaluation {
+  score: number
+  feedback: string
+  strengths?: string[]
+  improvements?: string[]
+}
+
+interface PastQuestion {
+  id: string
+  content: string
+  answer: string | null
+  score: number | null
+  feedback: string | null
+  order: number
+}
+
 export default function InterviewPage() {
   const router = useRouter()
   const params = useParams()
@@ -14,10 +30,13 @@ export default function InterviewPage() {
   const [answer, setAnswer] = useState("")
   const [loading, setLoading] = useState(false)
   const [questionNumber, setQuestionNumber] = useState(1)
-  const [feedback, setFeedback] = useState<any>(null)
+  const [feedback, setFeedback] = useState<Evaluation | null>(null)
   const [finished, setFinished] = useState(false)
   const [finalScore, setFinalScore] = useState(0)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [loadError, setLoadError] = useState("")
+  const [submitError, setSubmitError] = useState("")
+  const [pastQuestions, setPastQuestions] = useState<PastQuestion[]>([])
   const [mode, setMode] = useState<"text" | "voice">("text")
   const [speaking, setSpeaking] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -35,6 +54,16 @@ export default function InterviewPage() {
       setAnswer(transcript)
     }
   }, [transcript, mode])
+
+  // Stop the countdown timer and any in-flight speech when leaving the page,
+  // otherwise the interval fires against an unmounted component.
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current)
+      SpeechRecognition.stopListening()
+      if (typeof window !== "undefined") window.speechSynthesis.cancel()
+    }
+  }, [])
 
   const speakQuestion = (text: string) => {
     if (typeof window === "undefined") return
@@ -67,10 +96,29 @@ export default function InterviewPage() {
 
   useEffect(() => {
     fetch(`/api/interview/${interviewId}`)
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error || "Could not load this interview")
+        }
+        return res.json()
+      })
       .then((data) => {
-        setQuestion(data.question)
-        setQuestionId(data.questionId)
+        // A finished interview is shown as a result screen rather than
+        // restarting from question one over the top of existing answers.
+        if (data.completed) {
+          setFinished(true)
+          setFinalScore(data.score ?? 0)
+          setPastQuestions(data.questions ?? [])
+        } else {
+          setQuestion(data.question)
+          setQuestionId(data.questionId)
+          setQuestionNumber(data.questionNumber ?? 1)
+        }
+        setInitialLoading(false)
+      })
+      .catch((err) => {
+        setLoadError(err.message)
         setInitialLoading(false)
       })
   }, [interviewId])
@@ -110,6 +158,7 @@ export default function InterviewPage() {
     if (!answer.trim()) return
     setLoading(true)
     setFeedback(null)
+    setSubmitError("")
     SpeechRecognition.stopListening()
     window.speechSynthesis.cancel()
 
@@ -119,7 +168,14 @@ export default function InterviewPage() {
       body: JSON.stringify({ answer, currentQuestionId: questionId })
     })
 
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
+
+    // Covers rate limiting (429), validation (400) and duplicate submits.
+    if (!res.ok) {
+      setSubmitError(data.error || "Could not submit your answer. Try again.")
+      setLoading(false)
+      return
+    }
 
     if (data.finished) {
       setFinished(true)
@@ -152,6 +208,24 @@ export default function InterviewPage() {
     )
   }
 
+  if (loadError) {
+    return (
+      <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Arial" }}>
+        <div style={{ textAlign: "center", maxWidth: "400px", padding: "0 16px" }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔒</div>
+          <h1 style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "8px" }}>Interview unavailable</h1>
+          <p style={{ color: "#888", marginBottom: "24px" }}>{loadError}</p>
+          <button
+            onClick={() => router.push("/dashboard")}
+            style={{ padding: "12px 24px", background: "#2563eb", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </main>
+    )
+  }
+
   if (finished) {
     return (
       <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", fontFamily: "Arial", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -169,7 +243,7 @@ export default function InterviewPage() {
             {feedback && (
               <div style={{ textAlign: "left" }}>
                 <p style={{ color: "#ccc", marginBottom: "16px", lineHeight: "1.6" }}>{feedback.feedback}</p>
-                {feedback.strengths?.length > 0 && (
+                {feedback.strengths && feedback.strengths.length > 0 && (
                   <div style={{ marginBottom: "16px" }}>
                     <div style={{ color: "#22c55e", fontWeight: "600", marginBottom: "8px" }}>✅ Strengths</div>
                     {feedback.strengths.map((s: string, i: number) => (
@@ -177,7 +251,7 @@ export default function InterviewPage() {
                     ))}
                   </div>
                 )}
-                {feedback.improvements?.length > 0 && (
+                {feedback.improvements && feedback.improvements.length > 0 && (
                   <div>
                     <div style={{ color: "#f59e0b", fontWeight: "600", marginBottom: "8px" }}>🎯 Areas to Improve</div>
                     {feedback.improvements.map((s: string, i: number) => (
@@ -188,6 +262,35 @@ export default function InterviewPage() {
               </div>
             )}
           </div>
+
+          {/* Read-only transcript, shown when revisiting a finished session. */}
+          {pastQuestions.length > 0 && (
+            <div style={{ textAlign: "left", marginBottom: "24px" }}>
+              {pastQuestions.map((q) => (
+                <div key={q.id} style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "20px", marginBottom: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
+                    <div style={{ color: "#60a5fa", fontSize: "13px", fontWeight: "600" }}>Question {q.order}</div>
+                    {q.score !== null && (
+                      <div style={{ color: q.score >= 8 ? "#22c55e" : q.score >= 6 ? "#60a5fa" : "#f59e0b", fontSize: "13px", fontWeight: "600" }}>
+                        {q.score}/10
+                      </div>
+                    )}
+                  </div>
+                  <p style={{ color: "#f0f0f0", fontSize: "15px", lineHeight: "1.6", marginBottom: "12px" }}>{q.content}</p>
+                  {q.answer && (
+                    <div style={{ background: "#0a0a0a", borderRadius: "8px", padding: "12px", marginBottom: "10px" }}>
+                      <div style={{ color: "#888", fontSize: "12px", marginBottom: "6px" }}>Your answer</div>
+                      <p style={{ color: "#ccc", fontSize: "14px", lineHeight: "1.6" }}>{q.answer}</p>
+                    </div>
+                  )}
+                  {q.feedback && (
+                    <p style={{ color: "#888", fontSize: "13px", lineHeight: "1.6" }}>{q.feedback}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
             <button onClick={() => router.push("/interview/new")} style={{ padding: "12px 24px", background: "#2563eb", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}>
               Practice Again
@@ -252,6 +355,12 @@ export default function InterviewPage() {
             </button>
           )}
         </div>
+
+        {submitError && (
+          <div style={{ background: "#2d1515", border: "1px solid #ef4444", color: "#ef4444", padding: "12px", borderRadius: "8px", marginBottom: "16px", fontSize: "14px" }}>
+            {submitError}
+          </div>
+        )}
 
         {feedback && (
           <div style={{ background: "#0f2a0f", border: "1px solid #22c55e", borderRadius: "12px", padding: "20px", marginBottom: "24px" }}>

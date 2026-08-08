@@ -1,12 +1,27 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import { signIn } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 
+// useSearchParams opts the subtree out of prerendering, so it is isolated
+// behind a Suspense boundary to keep the build from failing.
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ minHeight: "100vh", background: "#0a0a0a" }} />
+      }
+    >
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -27,7 +42,15 @@ export default function LoginPage() {
       setError("Invalid email or password")
       setLoading(false)
     } else {
-      router.push("/dashboard")
+      // Return the user to the page middleware bounced them from. Only
+      // same-site paths are honoured, so this cannot be used as an open
+      // redirect to an attacker's domain.
+      const callbackUrl = searchParams.get("callbackUrl")
+      const target =
+        callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")
+          ? callbackUrl
+          : "/dashboard"
+      router.push(target)
     }
   }
 

@@ -1,87 +1,114 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/auth"
-import { prisma } from "@/lib/prisma"
 import { extractText } from "unpdf"
+import { prisma } from "@/lib/prisma"
+import {
+  badRequest,
+  getCurrentUser,
+  serverError,
+  tooManyRequests,
+  unauthorized,
+} from "@/lib/api"
+import { rateLimit } from "@/lib/rate-limit"
+
+const MAX_BYTES = 5 * 1024 * 1024 // 5 MB
+const MAX_EXTRACTED_CHARS = 3000
+
+/** PDFs begin with "%PDF-". The client-supplied MIME type is not evidence. */
+function looksLikePdf(bytes: Uint8Array) {
+  return (
+    bytes.length > 5 &&
+    bytes[0] === 0x25 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x44 &&
+    bytes[3] === 0x46 &&
+    bytes[4] === 0x2d
+  )
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth()
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const user = await getCurrentUser()
+    if (!user) return unauthorized()
+
+    // PDF parsing is CPU-bound; cap it well below the answer endpoint.
+    const limit = rateLimit(`resume:${user.id}`, 10, 60 * 60_000)
+    if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds)
 
     const formData = await req.formData()
-    const file = formData.get("resume") as File
+    const file = formData.get("resume")
 
-    if (!file) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 })
+    if (!file || typeof file === "string") {
+      return badRequest("No file uploaded")
+    }
+
+    if (file.size > MAX_BYTES) {
+      return badRequest("File is too large (5 MB maximum)")
     }
 
     if (file.type !== "application/pdf") {
-      return NextResponse.json({ error: "Only PDF files allowed" }, { status: 400 })
+      return badRequest("Only PDF files are allowed")
     }
 
-    const bytes = await file.arrayBuffer()
-    const buffer = new Uint8Array(bytes)
-    const { text } = await extractText(buffer, { mergePages: true })
-    const extractedText = text.slice(0, 3000)
+    const bytes = new Uint8Array(await file.arrayBuffer())
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    if (!looksLikePdf(bytes)) {
+      return badRequest("That file is not a valid PDF")
     }
 
-    await prisma.resume.deleteMany({
-      where: { userId: user.id }
-    })
+    let extractedText: string
+    try {
+      const { text } = await extractText(bytes, { mergePages: true })
+      extractedText = text.slice(0, MAX_EXTRACTED_CHARS)
+    } catch {
+      // A malformed or encrypted PDF is user error, not a server fault.
+      return badRequest("Could not read that PDF. Try re-exporting it.")
+    }
 
-    const resume = await prisma.resume.create({
-      data: {
-        userId: user.id,
-        filename: file.name,
-        content: extractedText
-      }
+    if (!extractedText.trim()) {
+      return badRequest(
+        "No text found in that PDF. Scanned images are not supported."
+      )
+    }
+
+    // One resume per user: replace and insert together so a failure cannot
+    // leave the user with no resume at all.
+    const resume = await prisma.$transaction(async (tx) => {
+      await tx.resume.deleteMany({ where: { userId: user.id } })
+      return tx.resume.create({
+        data: {
+          userId: user.id,
+          // Filenames are echoed back into the UI; strip path separators.
+          filename: file.name.replace(/[/\\]/g, "_").slice(0, 255),
+          content: extractedText,
+        },
+      })
     })
 
     return NextResponse.json({
       success: true,
       resumeId: resume.id,
-      filename: file.name,
-      preview: extractedText.slice(0, 200)
+      filename: resume.filename,
+      preview: extractedText.slice(0, 200),
     })
-
-  } catch (error: any) {
-    console.error("Resume upload error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    return serverError("POST /api/resume", error)
   }
 }
 
 export async function GET() {
   try {
-    const session = await auth()
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
+    const user = await getCurrentUser()
+    if (!user) return unauthorized()
 
     const resume = await prisma.resume.findFirst({
       where: { userId: user.id },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
+      // The full extracted text is not needed by the UI.
+      select: { id: true, filename: true, createdAt: true },
     })
 
     return NextResponse.json({ resume })
-
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    return serverError("GET /api/resume", error)
   }
 }

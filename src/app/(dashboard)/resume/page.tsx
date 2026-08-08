@@ -3,13 +3,19 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 
+interface StoredResume {
+  id: string
+  filename: string
+  createdAt: string | Date
+}
+
 export default function ResumePage() {
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
-  const [existingResume, setExistingResume] = useState<any>(null)
+  const [existingResume, setExistingResume] = useState<StoredResume | null>(null)
   const [loading, setLoading] = useState(true)
   const [dragOver, setDragOver] = useState(false)
 
@@ -42,7 +48,12 @@ export default function ResumePage() {
       setError(data.error || "Upload failed")
     } else {
       setSuccess(true)
-      setExistingResume({ filename: file.name, createdAt: new Date() })
+      // Use the server's values: it sanitises the filename before storing it.
+      setExistingResume({
+        id: data.resumeId,
+        filename: data.filename,
+        createdAt: new Date().toISOString(),
+      })
     }
 
     setUploading(false)
