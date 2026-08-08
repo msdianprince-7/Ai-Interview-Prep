@@ -1,6 +1,38 @@
 import Groq from "groq-sdk"
+import { z } from "zod"
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+/**
+ * Timeout and retry are configured on the client rather than with a manual
+ * AbortSignal so the SDK's own backoff and Retry-After handling apply. It
+ * retries network errors, timeouts, 408/409/429 and 5xx.
+ *
+ * The SDK retries timeouts too, so the worst-case wait is roughly
+ * timeout x (maxRetries + 1) plus backoff — about 25s here. That is kept under
+ * the routes' `maxDuration = 30`, so a stuck upstream surfaces as a clean 503
+ * rather than the platform killing the function mid-request.
+ */
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+  timeout: 12_000,
+  maxRetries: 1,
+})
+
+/** The model could not be reached, or failed after retries. Retryable. */
+export class ModelUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super("The interview model is unavailable")
+    this.name = "ModelUnavailableError"
+    this.cause = cause
+  }
+}
+
+/** The model responded, but not with output we can use. Retryable. */
+export class ModelResponseError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "ModelResponseError"
+  }
+}
 
 /** How much extracted resume text to include in the prompt. */
 const RESUME_PROMPT_CHARS = 2000
@@ -37,34 +69,65 @@ export async function generateQuestion(
 ) {
   const resumeContext = buildResumeContext(resumeContent)
 
-  const response = await groq.chat.completions.create({
-    model: "llama-3.1-8b-instant",
-    messages: [
-      {
-        role: "system",
-        content: `You are a senior technical interviewer for ${role} positions.
+  let response
+  try {
+    response = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      messages: [
+        {
+          role: "system",
+          content: `You are a senior technical interviewer for ${role} positions.
 Ask ONE ${difficulty} difficulty interview question.
 ${resumeContext}
 ${previousQuestions.length > 0 ? `Do not repeat these: ${previousQuestions.join(" | ")}` : ""}
 Return only the question text, nothing else.`
-      }
-    ],
-    max_tokens: 200
-  })
-  return response.choices[0].message.content
+        }
+      ],
+      max_tokens: 200
+    })
+  } catch (error) {
+    throw new ModelUnavailableError(error)
+  }
+
+  const question = response.choices[0]?.message?.content?.trim()
+
+  if (!question) {
+    throw new ModelResponseError("Model returned no question text")
+  }
+
+  return question
 }
+
+/**
+ * Shape the evaluation must satisfy before it is trusted. A response that
+ * parses as JSON but omits the score, or scores outside 1-10, is rejected
+ * rather than coerced, since the value is stored and averaged into analytics.
+ */
+const evaluationSchema = z.object({
+  score: z.number().finite().min(1).max(10),
+  feedback: z.string().trim().min(1),
+  strengths: z.array(z.string()).default([]),
+  improvements: z.array(z.string()).default([]),
+})
+
+export type Evaluation = z.infer<typeof evaluationSchema>
 
 export async function evaluateAnswer(
   question: string,
   answer: string,
   role: string
-) {
-  const response = await groq.chat.completions.create({
-    model: "llama-3.1-8b-instant",
-    messages: [
-      {
-        role: "system",
-        content: `You are a strict technical interviewer evaluating a ${role} interview answer.
+): Promise<Evaluation> {
+  let response
+  try {
+    response = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      // Constrains the model to emit syntactically valid JSON, removing the
+      // markdown-fence stripping that used to be needed.
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: `You are a strict technical interviewer evaluating a ${role} interview answer.
 Be honest and critical. Do NOT give high scores for vague or incorrect answers.
 
 Scoring guide:
@@ -86,21 +149,38 @@ Return ONLY a JSON object:
   "strengths": ["<only real strengths, if none say 'None demonstrated'>"],
   "improvements": ["<specific things to study>"]
 }`
-      }
-    ],
-    max_tokens: 500
-  })
-
-  try {
-    const text = response.choices[0].message.content || "{}"
-    const clean = text.replace(/```json|```/g, "").trim()
-    return JSON.parse(clean)
-  } catch {
-    return {
-      score: 1,
-      feedback: "Could not evaluate answer.",
-      strengths: ["None demonstrated"],
-      improvements: ["Please provide a real answer"]
-    }
+        }
+      ],
+      max_tokens: 500
+    })
+  } catch (error) {
+    throw new ModelUnavailableError(error)
   }
+
+  const text = response.choices[0]?.message?.content
+
+  if (!text) {
+    throw new ModelResponseError("Model returned no evaluation")
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    // Deliberately an error, not a fallback score. Returning a fabricated 1/10
+    // here would be stored permanently and dragged into the user's averages,
+    // indistinguishable from a genuinely poor answer.
+    throw new ModelResponseError("Model returned malformed JSON")
+  }
+
+  const result = evaluationSchema.safeParse(parsed)
+
+  if (!result.success) {
+    throw new ModelResponseError(
+      `Evaluation failed validation: ${result.error.issues[0]?.message}`
+    )
+  }
+
+  // The column is an Int; round once here so storage and display agree.
+  return { ...result.data, score: Math.round(result.data.score) }
 }

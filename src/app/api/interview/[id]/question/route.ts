@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { generateQuestion, evaluateAnswer } from "@/lib/openai"
+import {
+  generateQuestion,
+  evaluateAnswer,
+  ModelResponseError,
+  ModelUnavailableError,
+} from "@/lib/openai"
 import {
   badRequest,
   getCurrentUser,
   getResumeContent,
+  modelUnavailable,
   notFound,
   serverError,
   tooManyRequests,
@@ -16,6 +22,9 @@ import {
   firstError,
   submitAnswerSchema,
 } from "@/lib/validation"
+
+// Up to two model calls (evaluate, then generate), each with one retry.
+export const maxDuration = 60
 
 export async function POST(
   req: NextRequest,
@@ -55,26 +64,58 @@ export async function POST(
 
     if (!currentQuestion) return notFound("Question not found")
 
-    // Prevents replaying an answer to re-roll a score, and stops a double
-    // submit from advancing the interview twice.
-    if (currentQuestion.answer !== null) {
-      return badRequest("This question has already been answered")
-    }
+    const alreadyEvaluated = currentQuestion.answer !== null
 
-    const evaluation = await evaluateAnswer(
-      currentQuestion.content,
-      answer,
-      interview.role
+    // A question still awaiting an answer means the client is out of step
+    // (stale tab, double submit). Resend it instead of re-scoring anything.
+    const pending = interview.questions.find(
+      (q) => q.answer === null && q.id !== currentQuestion.id
     )
 
-    await prisma.question.update({
-      where: { id: currentQuestion.id },
-      data: {
-        answer,
-        score: evaluation.score,
-        feedback: evaluation.feedback,
-      },
-    })
+    if (alreadyEvaluated && pending) {
+      return NextResponse.json({
+        finished: false,
+        nextQuestion: pending.content,
+        nextQuestionId: pending.id,
+        evaluation: null,
+      })
+    }
+
+    // If it was already scored and nothing is pending, a previous attempt saved
+    // the answer but failed before creating the next question. Skip evaluation
+    // and fall through to generation to recover, rather than rejecting and
+    // leaving the interview stranded with no answerable question.
+    let evaluation = null
+
+    if (!alreadyEvaluated) {
+      // Evaluated before anything is written. If the model fails, the answer is
+      // left unsaved so the candidate can resubmit rather than being stuck with
+      // a fabricated score.
+      try {
+        evaluation = await evaluateAnswer(
+          currentQuestion.content,
+          answer,
+          interview.role
+        )
+      } catch (error) {
+        if (
+          error instanceof ModelUnavailableError ||
+          error instanceof ModelResponseError
+        ) {
+          return modelUnavailable("POST /api/interview/[id]/question", error)
+        }
+        throw error
+      }
+
+      await prisma.question.update({
+        where: { id: currentQuestion.id },
+        data: {
+          answer,
+          score: evaluation.score,
+          feedback: evaluation.feedback,
+        },
+      })
+    }
 
     const answeredCount = interview.questions.length
 
@@ -102,7 +143,9 @@ export async function POST(
       return NextResponse.json({
         finished: true,
         score: avgScore,
-        feedback: evaluation.feedback,
+        // On the recovery path the answer was scored by an earlier attempt, so
+        // fall back to what was stored then.
+        feedback: evaluation?.feedback ?? currentQuestion.feedback,
         evaluation,
       })
     }
@@ -114,18 +157,25 @@ export async function POST(
       : null
 
     const previousQuestions = interview.questions.map((q) => q.content)
-    const nextQuestion = await generateQuestion(
-      interview.role,
-      interview.difficulty,
-      previousQuestions,
-      resumeContent
-    )
 
-    if (!nextQuestion) {
-      return serverError(
-        "POST /api/interview/[id]/question",
-        new Error("Model returned no question text")
+    let nextQuestion
+    try {
+      nextQuestion = await generateQuestion(
+        interview.role,
+        interview.difficulty,
+        previousQuestions,
+        resumeContent
       )
+    } catch (error) {
+      if (
+        error instanceof ModelUnavailableError ||
+        error instanceof ModelResponseError
+      ) {
+        // The answer above is already saved. Resubmitting takes the recovery
+        // path and retries generation without re-scoring.
+        return modelUnavailable("POST /api/interview/[id]/question", error)
+      }
+      throw error
     }
 
     const newQuestion = await prisma.question.create({

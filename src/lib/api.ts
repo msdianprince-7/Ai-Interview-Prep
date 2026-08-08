@@ -45,6 +45,22 @@ export function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
 }
 
+/**
+ * Upstream model failure. 503 rather than 500 because the request is worth
+ * retrying unchanged, and nothing was persisted.
+ */
+export function modelUnavailable(context: string, error: unknown) {
+  console.error(`[${context}] model failure`, error)
+  return NextResponse.json(
+    {
+      error:
+        "The interview model is temporarily unavailable. Please try again in a moment.",
+      retryable: true,
+    },
+    { status: 503, headers: { "Retry-After": "5" } }
+  )
+}
+
 export function tooManyRequests(retryAfterSeconds: number) {
   return NextResponse.json(
     { error: "Too many requests. Please slow down and try again shortly." },
