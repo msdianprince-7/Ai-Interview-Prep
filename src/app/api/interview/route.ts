@@ -60,14 +60,22 @@ export async function POST(req: NextRequest) {
         difficulty,
         useResume,
         status: "in_progress",
-        questions: { create: { content: firstQuestion, order: 1 } },
+        questions: {
+          create: {
+            content: firstQuestion.question,
+            rubric: firstQuestion.rubric,
+            order: 1,
+          },
+        },
       },
       include: { questions: true },
     })
 
     return NextResponse.json({
       interviewId: interview.id,
-      question: firstQuestion,
+      // Only the question text goes to the client; the rubric is grading
+      // material and would hand the candidate the answer.
+      question: firstQuestion.question,
       questionId: interview.questions[0].id,
       personalized: Boolean(resumeContent),
     })

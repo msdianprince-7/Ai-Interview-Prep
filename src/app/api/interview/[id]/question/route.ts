@@ -95,7 +95,9 @@ export async function POST(
         evaluation = await evaluateAnswer(
           currentQuestion.content,
           answer,
-          interview.role
+          interview.role,
+          interview.difficulty,
+          currentQuestion.rubric
         )
       } catch (error) {
         if (
@@ -181,14 +183,17 @@ export async function POST(
     const newQuestion = await prisma.question.create({
       data: {
         interviewId: interview.id,
-        content: nextQuestion,
+        content: nextQuestion.question,
+        rubric: nextQuestion.rubric,
         order: answeredCount + 1,
       },
     })
 
     return NextResponse.json({
       finished: false,
-      nextQuestion,
+      // Text only. Sending the whole object would ship the rubric to the
+      // browser and hand the candidate the answer key.
+      nextQuestion: nextQuestion.question,
       nextQuestionId: newQuestion.id,
       evaluation,
     })

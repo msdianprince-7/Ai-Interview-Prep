@@ -13,6 +13,16 @@ export async function GET() {
       include: {
         questions: {
           orderBy: { order: "asc" },
+          // Explicit select rather than the whole row: `rubric` is grading
+          // material and must not reach the browser.
+          select: {
+            id: true,
+            content: true,
+            answer: true,
+            score: true,
+            feedback: true,
+            order: true,
+          },
         },
       },
     })

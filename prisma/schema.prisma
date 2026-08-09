@@ -69,6 +69,10 @@ model Question {
   id          String   @id @default(cuid())
   interviewId String
   content     String   @db.Text
+  // What a strong answer must cover, generated with the question and used as
+  // the reference when grading. Nullable: questions created before this
+  // existed are graded without one.
+  rubric      String?  @db.Text
   answer      String?  @db.Text
   score       Int?
   feedback    String?  @db.Text

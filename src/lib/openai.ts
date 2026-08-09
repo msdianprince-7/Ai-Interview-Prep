@@ -61,41 +61,136 @@ resume is not relevant to the role being interviewed for, fall back to a
 general question for the role.`
 }
 
+/** What each difficulty is expected to demand, used when asking and grading. */
+const DIFFICULTY_GUIDE: Record<string, string> = {
+  Easy: "core fundamentals a junior should know. Definitions and basic usage are enough; depth is not expected.",
+  Medium:
+    "practical working knowledge. Expect concrete detail and awareness of trade-offs, but not deep internals.",
+  Hard: "senior-level depth. Expect internals, edge cases, failure modes and justified trade-offs.",
+}
+
+function difficultyGuide(difficulty: string) {
+  return DIFFICULTY_GUIDE[difficulty] ?? DIFFICULTY_GUIDE.Medium
+}
+
+/**
+ * The model returns `rubric` as either a string or a list of points depending
+ * on the run, so both are accepted and normalised to newline-separated text.
+ */
+const rubricField = z
+  .union([z.string(), z.array(z.string())])
+  .transform((value) =>
+    (Array.isArray(value) ? value.map((point) => `- ${point}`).join("\n") : value).trim()
+  )
+  .refine((value) => value.length >= 10, {
+    message: "Rubric is too short to grade against",
+  })
+
+const questionSchema = z.object({
+  question: z.string().trim().min(10),
+  rubric: rubricField,
+})
+
+export type GeneratedQuestion = z.infer<typeof questionSchema>
+
+/**
+ * Rejects multi-part questions. Grading a compound question produces an
+ * indefensible single score when a candidate answers one half well and the
+ * other badly, so the shape is enforced rather than merely requested.
+ */
+function compoundQuestionProblem(question: string): string | null {
+  const words = question.split(/\s+/).length
+  if (words > 45) return `too long (${words} words)`
+
+  if ((question.match(/\?/g) ?? []).length > 1) return "more than one question mark"
+
+  if (/\b(and|also|then)\s+(explain|describe|discuss|list|compare)\b/i.test(question)) {
+    return "chains a second ask"
+  }
+
+  if (/\b(additionally|furthermore|as well as)\b/i.test(question)) {
+    return "contains a continuation phrase"
+  }
+
+  return null
+}
+
 export async function generateQuestion(
   role: string,
   difficulty: string,
   previousQuestions: string[],
   resumeContent?: string | null
-) {
+): Promise<GeneratedQuestion> {
   const resumeContext = buildResumeContext(resumeContent)
 
-  let response
-  try {
-    response = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        {
-          role: "system",
-          content: `You are a senior technical interviewer for ${role} positions.
-Ask ONE ${difficulty} difficulty interview question.
+  const askedList = previousQuestions.length
+    ? `
+Questions already asked in this interview:
+${previousQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}
+
+Your question MUST cover a different topic from every question above. Do not
+reuse the same technology or concept, even reworded.`
+    : ""
+
+  const basePrompt = `You are a senior technical interviewer for ${role} positions.
+Ask ONE ${difficulty} interview question. At this difficulty, expect ${difficultyGuide(difficulty)}
 ${resumeContext}
-${previousQuestions.length > 0 ? `Do not repeat these: ${previousQuestions.join(" | ")}` : ""}
-Return only the question text, nothing else.`
-        }
-      ],
-      max_tokens: 200
-    })
-  } catch (error) {
-    throw new ModelUnavailableError(error)
+${askedList}
+
+Rules for the question:
+- Exactly ONE thing is asked. Never combine two topics with "and explain".
+- Under 40 words.
+- Either a direct question, or a single "Explain how..." prompt. Never both.
+
+Also produce a short grading rubric: 2-4 specific points a strong answer must
+cover. The rubric is for the grader and is never shown to the candidate.
+
+Return JSON: {"question": "<the question>", "rubric": "<what a strong answer must cover>"}`
+
+  async function ask(extraInstruction: string) {
+    let response
+    try {
+      response = await groq.chat.completions.create({
+        model: "llama-3.1-8b-instant",
+        response_format: { type: "json_object" },
+        messages: [{ role: "system", content: basePrompt + extraInstruction }],
+        max_tokens: 400,
+      })
+    } catch (error) {
+      throw new ModelUnavailableError(error)
+    }
+
+    const text = response.choices[0]?.message?.content
+    if (!text) throw new ModelResponseError("Model returned no question")
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      throw new ModelResponseError("Model returned malformed question JSON")
+    }
+
+    const result = questionSchema.safeParse(parsed)
+    if (!result.success) {
+      throw new ModelResponseError(
+        `Question failed validation: ${result.error.issues[0]?.message}`
+      )
+    }
+
+    return result.data
   }
 
-  const question = response.choices[0]?.message?.content?.trim()
+  const first = await ask("")
+  const problem = compoundQuestionProblem(first.question)
 
-  if (!question) {
-    throw new ModelResponseError("Model returned no question text")
-  }
+  if (!problem) return first
 
-  return question
+  // One retry with the specific defect named. The result is used either way:
+  // a slightly malformed question is better than failing the request, and the
+  // retry reliably improves shape even when it does not fully satisfy it.
+  return ask(
+    `\n\nYour previous attempt was rejected because it ${problem}. Ask a single, short, focused question.`
+  )
 }
 
 /**
@@ -103,11 +198,17 @@ Return only the question text, nothing else.`
  * parses as JSON but omits the score, or scores outside 1-10, is rejected
  * rather than coerced, since the value is stored and averaged into analytics.
  */
+/** Accepts a list or a single string, since the model returns both. */
+const stringList = z
+  .union([z.array(z.string()), z.string()])
+  .transform((value) => (Array.isArray(value) ? value : [value]))
+  .pipe(z.array(z.string().trim().min(1)))
+
 const evaluationSchema = z.object({
   score: z.number().finite().min(1).max(10),
   feedback: z.string().trim().min(1),
-  strengths: z.array(z.string()).default([]),
-  improvements: z.array(z.string()).default([]),
+  strengths: stringList.catch([]),
+  improvements: stringList.catch([]),
 })
 
 export type Evaluation = z.infer<typeof evaluationSchema>
@@ -115,8 +216,23 @@ export type Evaluation = z.infer<typeof evaluationSchema>
 export async function evaluateAnswer(
   question: string,
   answer: string,
-  role: string
+  role: string,
+  difficulty: string,
+  rubric?: string | null
 ): Promise<Evaluation> {
+  // Anchoring on the rubric written with the question stops the grader from
+  // re-deriving what "good" means on every call, which is what made scores
+  // drift between attempts at the same question.
+  const rubricSection = rubric?.trim()
+    ? `
+A strong answer must cover:
+${rubric.trim()}
+
+Score primarily on how much of the above the candidate actually covered.`
+    : `
+No rubric is stored for this question. Judge it on technical correctness and
+completeness for the stated difficulty.`
+
   let response
   try {
     response = await groq.chat.completions.create({
@@ -130,15 +246,22 @@ export async function evaluateAnswer(
           content: `You are a strict technical interviewer evaluating a ${role} interview answer.
 Be honest and critical. Do NOT give high scores for vague or incorrect answers.
 
+This question was asked at ${difficulty} difficulty, where the expectation is
+${difficultyGuide(difficulty)}
+Grade against that bar and no other: do not penalise an Easy answer for lacking
+senior-level depth, and do not reward a Hard answer that only states basics.
+
+Question: ${question}
+${rubricSection}
+
+Candidate's answer: ${answer}
+
 Scoring guide:
 - 1-2: No answer, completely wrong, or "no idea"
 - 3-4: Very weak, missing key concepts
 - 5-6: Partial understanding, missing important details
 - 7-8: Good answer with minor gaps
 - 9-10: Excellent, complete, well explained
-
-Question: ${question}
-Answer: ${answer}
 
 If the answer is blank, "no idea", "don't know" or clearly wrong, give score 1 or 2.
 
