@@ -30,6 +30,17 @@ export async function GET(
     const currentQuestion =
       interview.questions.find((q) => q.answer === null) ?? null
 
+    // Completed interviews are returned as a read-only transcript. This also
+    // covers the recovery state where every question is answered but the next
+    // one was never created.
+    const showTranscript =
+      interview.status === "completed" || currentQuestion === null
+
+    // Rubrics are the grading key, so they are released only once the
+    // interview is genuinely finished — never on the recovery path above,
+    // where the candidate can still resume and answer more questions.
+    const isFinished = interview.status === "completed"
+
     return NextResponse.json({
       status: interview.status,
       role: interview.role,
@@ -39,19 +50,18 @@ export async function GET(
       totalQuestions: interview.questions.length,
       question: currentQuestion?.content ?? null,
       questionId: currentQuestion?.id ?? null,
-      // Completed interviews are returned as a read-only transcript.
-      completed: interview.status === "completed" || currentQuestion === null,
-      questions:
-        interview.status === "completed" || currentQuestion === null
-          ? interview.questions.map((q) => ({
-              id: q.id,
-              content: q.content,
-              answer: q.answer,
-              score: q.score,
-              feedback: q.feedback,
-              order: q.order,
-            }))
-          : undefined,
+      completed: showTranscript,
+      questions: showTranscript
+        ? interview.questions.map((q) => ({
+            id: q.id,
+            content: q.content,
+            answer: q.answer,
+            score: q.score,
+            feedback: q.feedback,
+            order: q.order,
+            rubric: isFinished ? q.rubric : undefined,
+          }))
+        : undefined,
     })
   } catch (error) {
     return serverError("GET /api/interview/[id]", error)

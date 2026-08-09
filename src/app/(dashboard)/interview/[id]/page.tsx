@@ -18,6 +18,8 @@ interface PastQuestion {
   score: number | null
   feedback: string | null
   order: number
+  // Only sent once the interview is complete; withheld during the interview.
+  rubric?: string | null
 }
 
 export default function InterviewPage() {
@@ -181,6 +183,14 @@ export default function InterviewPage() {
       setFinished(true)
       setFinalScore(data.score)
       setFeedback(data.evaluation)
+
+      // Pull the full transcript so the results screen can show every question
+      // with its rubric. Re-using the GET keeps the "only when completed" rule
+      // in one place on the server.
+      fetch(`/api/interview/${interviewId}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((full) => setPastQuestions(full?.questions ?? []))
+        .catch(() => setPastQuestions([]))
     } else {
       setFeedback(data.evaluation)
       setTimeout(() => {
@@ -285,6 +295,27 @@ export default function InterviewPage() {
                   )}
                   {q.feedback && (
                     <p style={{ color: "#888", fontSize: "13px", lineHeight: "1.6" }}>{q.feedback}</p>
+                  )}
+
+                  {/* The grading key, released only after the interview ends.
+                      This is the part that tells the candidate what they
+                      actually needed to say. */}
+                  {q.rubric && (
+                    <div style={{ marginTop: "12px", background: "#0a1929", border: "1px solid #1e3a5f", borderRadius: "8px", padding: "12px" }}>
+                      <div style={{ color: "#60a5fa", fontSize: "12px", fontWeight: "600", marginBottom: "8px" }}>
+                        💡 What a strong answer covered
+                      </div>
+                      {q.rubric
+                        .split("\n")
+                        .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+                        .filter(Boolean)
+                        .map((point, i) => (
+                          <div key={i} style={{ color: "#ccc", fontSize: "13px", lineHeight: "1.6", display: "flex", gap: "8px", marginBottom: "4px" }}>
+                            <span style={{ color: "#60a5fa" }}>•</span>
+                            <span>{point}</span>
+                          </div>
+                        ))}
+                    </div>
                   )}
                 </div>
               ))}
