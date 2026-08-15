@@ -99,13 +99,31 @@ const questionSchema = z.object({
 export type GeneratedQuestion = z.infer<typeof questionSchema>
 
 /**
- * Rejects multi-part questions. Grading a compound question produces an
- * indefensible single score when a candidate answers one half well and the
- * other badly, so the shape is enforced rather than merely requested.
+ * Rejects questions this interview format cannot support.
+ *
+ * Two classes. Compound questions produce an indefensible single score when a
+ * candidate answers one half well and the other badly. Coding exercises are
+ * unanswerable here at all: the candidate has a plain textarea and a
+ * microphone, so "implement an LRU cache" cannot be answered as intended and
+ * grades the wrong thing.
  */
-function compoundQuestionProblem(question: string): string | null {
+function questionProblem(question: string): string | null {
   const words = question.split(/\s+/).length
   if (words > 45) return `too long (${words} words)`
+
+  // Asks for code rather than discussion.
+  if (/^\s*(implement|write|code|build)\b/i.test(question)) {
+    return "opens as a coding exercise"
+  }
+
+  if (/\b(write|implement)\s+(a|an|the)?\s*(function|method|class|algorithm|program|query)\b/i.test(question)) {
+    return "asks the candidate to write code"
+  }
+
+  // Textbook problem-statement phrasing.
+  if (/\bgiven\s+(an?|the)\s+(array|string|list|integer|tree|graph|matrix|linked)\b/i.test(question)) {
+    return "reads as a coding problem statement"
+  }
 
   if ((question.match(/\?/g) ?? []).length > 1) return "more than one question mark"
 
@@ -149,10 +167,17 @@ Ask ONE ${difficulty} interview question. At this difficulty, expect ${difficult
 ${resumeContext}
 ${askedList}
 
+This is a SPOKEN interview. The candidate replies in a few sentences, by typing
+or by voice. They cannot write or run code.
+
 Rules for the question:
 - Exactly ONE thing is asked. Never combine two topics with "and explain".
 - Under 40 words.
 - Either a direct question, or a single "Explain how..." prompt. Never both.
+- Never a coding exercise. Do not say "implement", "write a function", or
+  "given an array". No puzzles and no LeetCode-style problems.
+- Ask about experience, reasoning and trade-offs: how they would approach
+  something, why they chose an approach, what breaks at scale.
 
 Also produce a short grading rubric: 2-4 specific points a strong answer must
 cover. The rubric is for the grader and is never shown to the candidate.
@@ -193,7 +218,7 @@ Return JSON: {"question": "<the question>", "rubric": "<what a strong answer mus
   }
 
   const first = await ask("")
-  const problem = compoundQuestionProblem(first.question)
+  const problem = questionProblem(first.question)
 
   if (!problem) return first
 
@@ -342,7 +367,7 @@ Return ONLY a JSON object:
   // rather than retried: the caller falls back to a new-topic question, which
   // is already generated and waiting.
   const followUp =
-    result.data.followUp && !compoundQuestionProblem(result.data.followUp.question)
+    result.data.followUp && !questionProblem(result.data.followUp.question)
       ? result.data.followUp
       : null
 
