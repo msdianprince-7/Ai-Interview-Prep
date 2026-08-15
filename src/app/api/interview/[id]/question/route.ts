@@ -81,32 +81,73 @@ export async function POST(
       })
     }
 
-    // If it was already scored and nothing is pending, a previous attempt saved
-    // the answer but failed before creating the next question. Skip evaluation
-    // and fall through to generation to recover, rather than rejecting and
-    // leaving the interview stranded with no answerable question.
-    let evaluation = null
+    // Reaching here with `alreadyEvaluated` and nothing pending means a
+    // previous attempt saved the answer but failed before creating the next
+    // question. Evaluation is skipped and generation retried, rather than
+    // rejecting and leaving the interview with no answerable question.
+    const answeredCount = interview.questions.length
+    const willContinue = answeredCount < INTERVIEW_QUESTION_COUNT
 
-    if (!alreadyEvaluated) {
-      // Evaluated before anything is written. If the model fails, the answer is
-      // left unsaved so the candidate can resubmit rather than being stuck with
-      // a fabricated score.
-      try {
-        evaluation = await evaluateAnswer(
+    // Grading this answer and writing the next question are independent: the
+    // generator only reads the previous question text and the resume, never the
+    // evaluation. Running them together roughly halves the wait after each
+    // answer. Whether the interview continues is known up front, so no call is
+    // wasted on the final question.
+    const evaluationPromise = alreadyEvaluated
+      ? null
+      : evaluateAnswer(
           currentQuestion.content,
           answer,
           interview.role,
           interview.difficulty,
           currentQuestion.rubric
         )
-      } catch (error) {
-        if (
-          error instanceof ModelUnavailableError ||
-          error instanceof ModelResponseError
-        ) {
-          return modelUnavailable("POST /api/interview/[id]/question", error)
-        }
-        throw error
+
+    const nextQuestionPromise = willContinue
+      ? (async () => {
+          // Honours the choice stored when the interview started, so a session
+          // that began as generic stays generic even if a resume is uploaded
+          // midway.
+          const resumeContent = interview.useResume
+            ? await getResumeContent(user.id)
+            : null
+
+          return generateQuestion(
+            interview.role,
+            interview.difficulty,
+            interview.questions.map((q) => q.content),
+            resumeContent
+          )
+        })()
+      : null
+
+    // allSettled rather than all: it consumes both rejections, so a failure in
+    // one call cannot surface as an unhandled rejection while the other is
+    // still in flight.
+    const [evaluationResult, nextQuestionResult] = await Promise.allSettled([
+      evaluationPromise,
+      nextQuestionPromise,
+    ])
+
+    let evaluation = null
+
+    if (evaluationResult.status === "rejected") {
+      const error = evaluationResult.reason
+      if (
+        error instanceof ModelUnavailableError ||
+        error instanceof ModelResponseError
+      ) {
+        // Nothing is written, so the candidate can resubmit the same answer.
+        // Any question generated alongside this is discarded.
+        return modelUnavailable("POST /api/interview/[id]/question", error)
+      }
+      throw error
+    }
+
+    if (!alreadyEvaluated) {
+      evaluation = evaluationResult.value
+      if (!evaluation) {
+        throw new Error("Evaluation resolved empty for an unanswered question")
       }
 
       await prisma.question.update({
@@ -119,9 +160,7 @@ export async function POST(
       })
     }
 
-    const answeredCount = interview.questions.length
-
-    if (answeredCount >= INTERVIEW_QUESTION_COUNT) {
+    if (!willContinue) {
       const allQuestions = await prisma.question.findMany({
         where: { interviewId: interview.id },
       })
@@ -152,23 +191,8 @@ export async function POST(
       })
     }
 
-    // Honours the choice stored when the interview started, so a session that
-    // began as generic stays generic even if a resume is uploaded midway.
-    const resumeContent = interview.useResume
-      ? await getResumeContent(user.id)
-      : null
-
-    const previousQuestions = interview.questions.map((q) => q.content)
-
-    let nextQuestion
-    try {
-      nextQuestion = await generateQuestion(
-        interview.role,
-        interview.difficulty,
-        previousQuestions,
-        resumeContent
-      )
-    } catch (error) {
+    if (nextQuestionResult.status === "rejected") {
+      const error = nextQuestionResult.reason
       if (
         error instanceof ModelUnavailableError ||
         error instanceof ModelResponseError
@@ -178,6 +202,12 @@ export async function POST(
         return modelUnavailable("POST /api/interview/[id]/question", error)
       }
       throw error
+    }
+
+    const nextQuestion = nextQuestionResult.value
+
+    if (!nextQuestion) {
+      throw new Error("Question generation resolved empty for a continuing interview")
     }
 
     const newQuestion = await prisma.question.create({
