@@ -17,6 +17,34 @@ const groq = new Groq({
   maxRetries: 1,
 })
 
+/**
+ * Models are read from the environment so a provider deprecation can be
+ * handled by changing a variable rather than shipping code. `llama-3.1-8b-instant`
+ * was decommissioned on 2026-08-16; `openai/gpt-oss-20b` is Groq's stated
+ * replacement.
+ *
+ * Generation and evaluation are separate settings on purpose: grading benefits
+ * from a stronger model than question writing, so they can be pointed at
+ * different models without touching this file.
+ */
+const GENERATION_MODEL =
+  process.env.GROQ_GENERATION_MODEL ?? "openai/gpt-oss-20b"
+const EVALUATION_MODEL =
+  process.env.GROQ_EVALUATION_MODEL ?? "openai/gpt-oss-20b"
+
+/**
+ * gpt-oss models think before answering, and that reasoning is billed and
+ * counted against the tokens-per-minute quota. "low" roughly halves total
+ * tokens per call (843 -> 454 measured) with no loss of output quality for
+ * these prompts, which matters on a metered tier.
+ *
+ * Applied only to models known to accept it: an unrecognised parameter is a
+ * 400 on other models, and the model id is configurable.
+ */
+function reasoningOptions(model: string) {
+  return model.includes("gpt-oss") ? { reasoning_effort: "low" as const } : {}
+}
+
 /** The model could not be reached, or failed after retries. Retryable. */
 export class ModelUnavailableError extends Error {
   constructor(cause: unknown) {
@@ -80,7 +108,12 @@ function difficultyGuide(difficulty: string) {
 const rubricField = z
   .union([z.string(), z.array(z.string())])
   .transform((value) =>
-    (Array.isArray(value) ? value.map((point) => `- ${point}`).join("\n") : value).trim()
+    (Array.isArray(value)
+      ? value.map((point) => `- ${point}`).join("\n")
+      : // Some responses contain the two characters \ and n rather than a real
+        // newline, which would render the rubric as one run-on line.
+        value.replace(/\\n/g, "\n")
+    ).trim()
   )
   .refine((value) => value.length >= 10, {
     message: "Rubric is too short to grade against",
@@ -188,10 +221,15 @@ Return JSON: {"question": "<the question>", "rubric": "<what a strong answer mus
     let response
     try {
       response = await groq.chat.completions.create({
-        model: "llama-3.1-8b-instant",
+        model: GENERATION_MODEL,
+        ...reasoningOptions(GENERATION_MODEL),
         response_format: { type: "json_object" },
         messages: [{ role: "system", content: basePrompt + extraInstruction }],
-        max_tokens: 400,
+        // Reasoning models count their internal reasoning against max_tokens.
+        // At 400 the budget was consumed before any JSON was emitted, and the
+        // API rejected the empty output with json_validate_failed. This is a
+        // ceiling, not a reservation: real completions run ~150-300 tokens.
+        max_tokens: 2000,
       })
     } catch (error) {
       throw new ModelUnavailableError(error)
@@ -287,7 +325,8 @@ completeness for the stated difficulty.`
   let response
   try {
     response = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+      model: EVALUATION_MODEL,
+      ...reasoningOptions(EVALUATION_MODEL),
       // Constrains the model to emit syntactically valid JSON, removing the
       // markdown-fence stripping that used to be needed.
       response_format: { type: "json_object" },
@@ -332,7 +371,8 @@ Return ONLY a JSON object:
 }`
         }
       ],
-      max_tokens: 500
+      // Headroom for reasoning tokens; see the note on generation above.
+      max_tokens: 2000
     })
   } catch (error) {
     throw new ModelUnavailableError(error)
