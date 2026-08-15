@@ -50,6 +50,7 @@ export async function GET(
       totalQuestions: interview.questions.length,
       question: currentQuestion?.content ?? null,
       questionId: currentQuestion?.id ?? null,
+      isFollowUp: currentQuestion?.isFollowUp ?? false,
       completed: showTranscript,
       questions: showTranscript
         ? interview.questions.map((q) => ({
@@ -59,6 +60,7 @@ export async function GET(
             score: q.score,
             feedback: q.feedback,
             order: q.order,
+            isFollowUp: q.isFollowUp,
             rubric: isFinished ? q.rubric : undefined,
           }))
         : undefined,

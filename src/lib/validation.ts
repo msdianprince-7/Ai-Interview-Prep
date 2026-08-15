@@ -21,6 +21,16 @@ export const DIFFICULTIES = ["Easy", "Medium", "Hard"] as const
 /** Number of questions in a single interview session. */
 export const INTERVIEW_QUESTION_COUNT = 5
 
+/**
+ * Cap on probing follow-ups per interview. Without a cap a candidate who keeps
+ * giving partial answers could spend the whole session on one topic, which is
+ * exactly the lack of variety the topic rules exist to prevent.
+ */
+export const MAX_FOLLOW_UPS = 2
+
+/** Score band where a follow-up is worthwhile: partial understanding only. */
+export const FOLLOW_UP_SCORE_RANGE = { min: 3, max: 7 } as const
+
 export const registerSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   email: z.email("Enter a valid email address").max(255).toLowerCase(),

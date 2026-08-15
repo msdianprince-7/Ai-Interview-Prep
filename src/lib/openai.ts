@@ -87,7 +87,12 @@ const rubricField = z
   })
 
 const questionSchema = z.object({
-  question: z.string().trim().min(10),
+  // Collapse internal whitespace: the model sometimes returns questions with
+  // embedded newlines and indentation, which render as ragged text.
+  question: z
+    .string()
+    .transform((q) => q.replace(/\s+/g, " ").trim())
+    .pipe(z.string().min(10)),
   rubric: rubricField,
 })
 
@@ -106,6 +111,13 @@ function compoundQuestionProblem(question: string): string | null {
 
   if (/\b(and|also|then)\s+(explain|describe|discuss|list|compare)\b/i.test(question)) {
     return "chains a second ask"
+  }
+
+  // "..., and how might that impact X?" is a second question wearing a comma.
+  // The comma is required: "What is an index and what does it cost?" is a
+  // single coherent question and must not be rejected.
+  if (/,\s+and\s+(how|what|why|when|which)\b/i.test(question)) {
+    return "asks a second question after 'and'"
   }
 
   if (/\b(additionally|furthermore|as well as)\b/i.test(question)) {
@@ -204,11 +216,25 @@ const stringList = z
   .transform((value) => (Array.isArray(value) ? value : [value]))
   .pipe(z.array(z.string().trim().min(1)))
 
+/**
+ * An optional probe into the specific gap this answer showed. Parsed with
+ * `.catch(null)` so a malformed follow-up degrades to "no follow-up" rather
+ * than failing the whole evaluation — grading matters more than the probe.
+ */
+const followUpField = z
+  .object({
+    question: z.string().trim().min(10),
+    rubric: rubricField,
+  })
+  .nullish()
+  .catch(null)
+
 const evaluationSchema = z.object({
   score: z.number().finite().min(1).max(10),
   feedback: z.string().trim().min(1),
   strengths: stringList.catch([]),
   improvements: stringList.catch([]),
+  followUp: followUpField,
 })
 
 export type Evaluation = z.infer<typeof evaluationSchema>
@@ -265,12 +291,19 @@ Scoring guide:
 
 If the answer is blank, "no idea", "don't know" or clearly wrong, give score 1 or 2.
 
+Follow-up: write one short question probing the single most important point the
+answer missed or was vaguest about, with its own rubric. Under 30 words, asking
+exactly one thing. Only use null if the answer genuinely covered everything.
+Do not judge whether a follow-up is deserved — that decision is made elsewhere;
+just identify the biggest gap.
+
 Return ONLY a JSON object:
 {
   "score": <number 1-10>,
   "feedback": "<honest 2-3 sentence feedback>",
   "strengths": ["<only real strengths, if none say 'None demonstrated'>"],
-  "improvements": ["<specific things to study>"]
+  "improvements": ["<specific things to study>"],
+  "followUp": null | {"question": "<one short probing question>", "rubric": "<what a strong answer must cover>"}
 }`
         }
       ],
@@ -304,6 +337,15 @@ Return ONLY a JSON object:
     )
   }
 
+  // Follow-ups become real interview questions, so they are held to the same
+  // single-topic shape as generated ones. A compound follow-up is dropped
+  // rather than retried: the caller falls back to a new-topic question, which
+  // is already generated and waiting.
+  const followUp =
+    result.data.followUp && !compoundQuestionProblem(result.data.followUp.question)
+      ? result.data.followUp
+      : null
+
   // The column is an Int; round once here so storage and display agree.
-  return { ...result.data, score: Math.round(result.data.score) }
+  return { ...result.data, followUp, score: Math.round(result.data.score) }
 }

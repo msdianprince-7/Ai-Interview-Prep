@@ -5,6 +5,7 @@ import {
   evaluateAnswer,
   ModelResponseError,
   ModelUnavailableError,
+  type Evaluation,
 } from "@/lib/openai"
 import {
   badRequest,
@@ -18,7 +19,9 @@ import {
 } from "@/lib/api"
 import { rateLimit } from "@/lib/rate-limit"
 import {
+  FOLLOW_UP_SCORE_RANGE,
   INTERVIEW_QUESTION_COUNT,
+  MAX_FOLLOW_UPS,
   firstError,
   submitAnswerSchema,
 } from "@/lib/validation"
@@ -129,7 +132,22 @@ export async function POST(
       nextQuestionPromise,
     ])
 
-    let evaluation = null
+    let evaluation: Evaluation | null = null
+
+    /**
+     * The evaluation carries the drafted follow-up and its rubric. Only the
+     * candidate-facing fields may be serialised: returning the raw object would
+     * hand over both the next question and its grading key.
+     */
+    const forClient = (e: Evaluation | null) =>
+      e
+        ? {
+            score: e.score,
+            feedback: e.feedback,
+            strengths: e.strengths,
+            improvements: e.improvements,
+          }
+        : null
 
     if (evaluationResult.status === "rejected") {
       const error = evaluationResult.reason
@@ -187,34 +205,65 @@ export async function POST(
         // On the recovery path the answer was scored by an earlier attempt, so
         // fall back to what was stored then.
         feedback: evaluation?.feedback ?? currentQuestion.feedback,
-        evaluation,
+        evaluation: forClient(evaluation),
       })
     }
 
-    if (nextQuestionResult.status === "rejected") {
-      const error = nextQuestionResult.reason
-      if (
-        error instanceof ModelUnavailableError ||
-        error instanceof ModelResponseError
-      ) {
-        // The answer above is already saved. Resubmitting takes the recovery
-        // path and retries generation without re-scoring.
-        return modelUnavailable("POST /api/interview/[id]/question", error)
+    // A follow-up probes the specific gap this answer showed, so it is only
+    // worthwhile for partial understanding: there is nothing to probe when the
+    // candidate said nothing, and nothing to add when they covered everything.
+    const followUpsSoFar = interview.questions.filter((q) => q.isFollowUp).length
+
+    const followUp =
+      evaluation?.followUp &&
+      evaluation.score >= FOLLOW_UP_SCORE_RANGE.min &&
+      evaluation.score <= FOLLOW_UP_SCORE_RANGE.max &&
+      followUpsSoFar < MAX_FOLLOW_UPS &&
+      // Never chain: a follow-up to a follow-up drills into one topic and
+      // starves the rest of the interview.
+      !currentQuestion.isFollowUp
+        ? evaluation.followUp
+        : null
+
+    // The speculative new-topic question is only needed when no follow-up is
+    // being asked, so its failure is not fatal in the follow-up case.
+    if (!followUp) {
+      if (nextQuestionResult.status === "rejected") {
+        const error = nextQuestionResult.reason
+        if (
+          error instanceof ModelUnavailableError ||
+          error instanceof ModelResponseError
+        ) {
+          // The answer above is already saved. Resubmitting takes the recovery
+          // path and retries generation without re-scoring.
+          return modelUnavailable("POST /api/interview/[id]/question", error)
+        }
+        throw error
       }
-      throw error
+
+      if (!nextQuestionResult.value) {
+        throw new Error(
+          "Question generation resolved empty for a continuing interview"
+        )
+      }
     }
 
-    const nextQuestion = nextQuestionResult.value
+    const chosen =
+      followUp ??
+      (nextQuestionResult.status === "fulfilled" && nextQuestionResult.value
+        ? nextQuestionResult.value
+        : null)
 
-    if (!nextQuestion) {
-      throw new Error("Question generation resolved empty for a continuing interview")
+    if (!chosen) {
+      throw new Error("No next question available")
     }
 
     const newQuestion = await prisma.question.create({
       data: {
         interviewId: interview.id,
-        content: nextQuestion.question,
-        rubric: nextQuestion.rubric,
+        content: chosen.question,
+        rubric: chosen.rubric,
+        isFollowUp: Boolean(followUp),
         order: answeredCount + 1,
       },
     })
@@ -223,9 +272,10 @@ export async function POST(
       finished: false,
       // Text only. Sending the whole object would ship the rubric to the
       // browser and hand the candidate the answer key.
-      nextQuestion: nextQuestion.question,
+      nextQuestion: chosen.question,
       nextQuestionId: newQuestion.id,
-      evaluation,
+      isFollowUp: Boolean(followUp),
+      evaluation: forClient(evaluation),
     })
   } catch (error) {
     return serverError("POST /api/interview/[id]/question", error)

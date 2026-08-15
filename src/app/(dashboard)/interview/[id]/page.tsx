@@ -18,6 +18,7 @@ interface PastQuestion {
   score: number | null
   feedback: string | null
   order: number
+  isFollowUp?: boolean
   // Only sent once the interview is complete; withheld during the interview.
   rubric?: string | null
 }
@@ -38,6 +39,7 @@ export default function InterviewPage() {
   const [initialLoading, setInitialLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
   const [submitError, setSubmitError] = useState("")
+  const [isFollowUp, setIsFollowUp] = useState(false)
   const [pastQuestions, setPastQuestions] = useState<PastQuestion[]>([])
   const [mode, setMode] = useState<"text" | "voice">("text")
   const [speaking, setSpeaking] = useState(false)
@@ -116,6 +118,7 @@ export default function InterviewPage() {
           setQuestion(data.question)
           setQuestionId(data.questionId)
           setQuestionNumber(data.questionNumber ?? 1)
+          setIsFollowUp(Boolean(data.isFollowUp))
         }
         setInitialLoading(false)
       })
@@ -196,6 +199,7 @@ export default function InterviewPage() {
       setTimeout(() => {
         setQuestion(data.nextQuestion)
         setQuestionId(data.nextQuestionId)
+        setIsFollowUp(Boolean(data.isFollowUp))
         setAnswer("")
         resetTranscript()
         setQuestionNumber((prev) => prev + 1)
@@ -279,7 +283,14 @@ export default function InterviewPage() {
               {pastQuestions.map((q) => (
                 <div key={q.id} style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "20px", marginBottom: "12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
-                    <div style={{ color: "#60a5fa", fontSize: "13px", fontWeight: "600" }}>Question {q.order}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div style={{ color: "#60a5fa", fontSize: "13px", fontWeight: "600" }}>Question {q.order}</div>
+                      {q.isFollowUp && (
+                        <span style={{ padding: "2px 8px", borderRadius: "20px", background: "#3b2f0b", border: "1px solid #f59e0b", color: "#fbbf24", fontSize: "10px", fontWeight: "600" }}>
+                          ↳ Follow-up
+                        </span>
+                      )}
+                    </div>
                     {q.score !== null && (
                       <div style={{ color: q.score >= 8 ? "#22c55e" : q.score >= 6 ? "#60a5fa" : "#f59e0b", fontSize: "13px", fontWeight: "600" }}>
                         {q.score}/10
@@ -367,6 +378,13 @@ export default function InterviewPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
             <div style={{ fontSize: "24px" }}>🤖</div>
             <div style={{ color: "#60a5fa", fontWeight: "600" }}>AI Interviewer</div>
+            {/* Signals that this digs into the previous answer rather than
+                opening a new topic, so the pivot does not feel random. */}
+            {isFollowUp && (
+              <div style={{ padding: "3px 10px", borderRadius: "20px", background: "#3b2f0b", border: "1px solid #f59e0b", color: "#fbbf24", fontSize: "11px", fontWeight: "600" }}>
+                ↳ Follow-up
+              </div>
+            )}
             {speaking && (
               <div style={{ display: "flex", gap: "3px", alignItems: "center", marginLeft: "8px" }}>
                 {[1, 2, 3].map((i) => (

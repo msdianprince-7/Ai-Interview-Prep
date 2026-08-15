@@ -73,6 +73,9 @@ model Question {
   // the reference when grading. Nullable: questions created before this
   // existed are graded without one.
   rubric      String?  @db.Text
+  // True when this question probes a gap in the previous answer rather than
+  // opening a new topic. Used to cap follow-ups and to label them in the UI.
+  isFollowUp  Boolean  @default(false)
   answer      String?  @db.Text
   score       Int?
   feedback    String?  @db.Text
