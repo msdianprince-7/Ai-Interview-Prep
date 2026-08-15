@@ -19,20 +19,6 @@ export async function getCurrentUser() {
   })
 }
 
-/**
- * Latest resume text for a user, or null if they have not uploaded one.
- * Question generation is personalised whenever this returns content.
- */
-export async function getResumeContent(userId: string) {
-  const resume = await prisma.resume.findFirst({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    select: { content: true },
-  })
-
-  return resume?.content ?? null
-}
-
 export function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 }

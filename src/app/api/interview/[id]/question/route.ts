@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import {
-  generateQuestion,
-  evaluateAnswer,
   ModelResponseError,
   ModelUnavailableError,
   type Evaluation,
 } from "@/lib/openai"
+import { runInterviewTurn } from "@/lib/interview-graph"
 import {
   badRequest,
   getCurrentUser,
-  getResumeContent,
   modelUnavailable,
   notFound,
   serverError,
@@ -18,15 +16,9 @@ import {
   unauthorized,
 } from "@/lib/api"
 import { rateLimit } from "@/lib/rate-limit"
-import {
-  FOLLOW_UP_SCORE_RANGE,
-  INTERVIEW_QUESTION_COUNT,
-  MAX_FOLLOW_UPS,
-  firstError,
-  submitAnswerSchema,
-} from "@/lib/validation"
+import { firstError, submitAnswerSchema } from "@/lib/validation"
 
-// Up to two model calls (evaluate, then generate), each with one retry.
+// Up to two model calls per turn, each with one retry.
 export const maxDuration = 60
 
 export async function POST(
@@ -80,59 +72,10 @@ export async function POST(
         finished: false,
         nextQuestion: pending.content,
         nextQuestionId: pending.id,
+        isFollowUp: pending.isFollowUp,
         evaluation: null,
       })
     }
-
-    // Reaching here with `alreadyEvaluated` and nothing pending means a
-    // previous attempt saved the answer but failed before creating the next
-    // question. Evaluation is skipped and generation retried, rather than
-    // rejecting and leaving the interview with no answerable question.
-    const answeredCount = interview.questions.length
-    const willContinue = answeredCount < INTERVIEW_QUESTION_COUNT
-
-    // Grading this answer and writing the next question are independent: the
-    // generator only reads the previous question text and the resume, never the
-    // evaluation. Running them together roughly halves the wait after each
-    // answer. Whether the interview continues is known up front, so no call is
-    // wasted on the final question.
-    const evaluationPromise = alreadyEvaluated
-      ? null
-      : evaluateAnswer(
-          currentQuestion.content,
-          answer,
-          interview.role,
-          interview.difficulty,
-          currentQuestion.rubric
-        )
-
-    const nextQuestionPromise = willContinue
-      ? (async () => {
-          // Honours the choice stored when the interview started, so a session
-          // that began as generic stays generic even if a resume is uploaded
-          // midway.
-          const resumeContent = interview.useResume
-            ? await getResumeContent(user.id)
-            : null
-
-          return generateQuestion(
-            interview.role,
-            interview.difficulty,
-            interview.questions.map((q) => q.content),
-            resumeContent
-          )
-        })()
-      : null
-
-    // allSettled rather than all: it consumes both rejections, so a failure in
-    // one call cannot surface as an unhandled rejection while the other is
-    // still in flight.
-    const [evaluationResult, nextQuestionResult] = await Promise.allSettled([
-      evaluationPromise,
-      nextQuestionPromise,
-    ])
-
-    let evaluation: Evaluation | null = null
 
     /**
      * The evaluation carries the drafted follow-up and its rubric. Only the
@@ -149,133 +92,53 @@ export async function POST(
           }
         : null
 
-    if (evaluationResult.status === "rejected") {
-      const error = evaluationResult.reason
+    // Orchestration lives in the graph: grade and draft in parallel, then
+    // branch to a follow-up, a new topic, or completion.
+    let outcome
+    try {
+      outcome = await runInterviewTurn({
+        interviewId: interview.id,
+        userId: user.id,
+        role: interview.role,
+        difficulty: interview.difficulty,
+        useResume: interview.useResume,
+        answer,
+        currentQuestion,
+        questions: interview.questions,
+        alreadyEvaluated,
+      })
+    } catch (error) {
       if (
         error instanceof ModelUnavailableError ||
         error instanceof ModelResponseError
       ) {
-        // Nothing is written, so the candidate can resubmit the same answer.
-        // Any question generated alongside this is discarded.
+        // Either nothing was written (grading failed, so the answer can be
+        // resubmitted) or the answer was saved and only generation failed, in
+        // which case resubmitting takes the recovery path.
         return modelUnavailable("POST /api/interview/[id]/question", error)
       }
       throw error
     }
 
-    if (!alreadyEvaluated) {
-      evaluation = evaluationResult.value
-      if (!evaluation) {
-        throw new Error("Evaluation resolved empty for an unanswered question")
-      }
-
-      await prisma.question.update({
-        where: { id: currentQuestion.id },
-        data: {
-          answer,
-          score: evaluation.score,
-          feedback: evaluation.feedback,
-        },
-      })
-    }
-
-    if (!willContinue) {
-      const allQuestions = await prisma.question.findMany({
-        where: { interviewId: interview.id },
-      })
-
-      const scored = allQuestions.filter((q) => q.score !== null)
-      const avgScore = scored.length
-        ? Math.round(
-            scored.reduce((total, q) => total + (q.score ?? 0), 0) / scored.length
-          )
-        : 0
-
-      await prisma.interview.update({
-        where: { id: interview.id },
-        data: {
-          status: "completed",
-          score: avgScore,
-          completedAt: new Date(),
-        },
-      })
-
+    if (outcome.finished) {
       return NextResponse.json({
         finished: true,
-        score: avgScore,
+        score: outcome.score,
         // On the recovery path the answer was scored by an earlier attempt, so
         // fall back to what was stored then.
-        feedback: evaluation?.feedback ?? currentQuestion.feedback,
-        evaluation: forClient(evaluation),
+        feedback: outcome.evaluation?.feedback ?? currentQuestion.feedback,
+        evaluation: forClient(outcome.evaluation),
       })
     }
-
-    // A follow-up probes the specific gap this answer showed, so it is only
-    // worthwhile for partial understanding: there is nothing to probe when the
-    // candidate said nothing, and nothing to add when they covered everything.
-    const followUpsSoFar = interview.questions.filter((q) => q.isFollowUp).length
-
-    const followUp =
-      evaluation?.followUp &&
-      evaluation.score >= FOLLOW_UP_SCORE_RANGE.min &&
-      evaluation.score <= FOLLOW_UP_SCORE_RANGE.max &&
-      followUpsSoFar < MAX_FOLLOW_UPS &&
-      // Never chain: a follow-up to a follow-up drills into one topic and
-      // starves the rest of the interview.
-      !currentQuestion.isFollowUp
-        ? evaluation.followUp
-        : null
-
-    // The speculative new-topic question is only needed when no follow-up is
-    // being asked, so its failure is not fatal in the follow-up case.
-    if (!followUp) {
-      if (nextQuestionResult.status === "rejected") {
-        const error = nextQuestionResult.reason
-        if (
-          error instanceof ModelUnavailableError ||
-          error instanceof ModelResponseError
-        ) {
-          // The answer above is already saved. Resubmitting takes the recovery
-          // path and retries generation without re-scoring.
-          return modelUnavailable("POST /api/interview/[id]/question", error)
-        }
-        throw error
-      }
-
-      if (!nextQuestionResult.value) {
-        throw new Error(
-          "Question generation resolved empty for a continuing interview"
-        )
-      }
-    }
-
-    const chosen =
-      followUp ??
-      (nextQuestionResult.status === "fulfilled" && nextQuestionResult.value
-        ? nextQuestionResult.value
-        : null)
-
-    if (!chosen) {
-      throw new Error("No next question available")
-    }
-
-    const newQuestion = await prisma.question.create({
-      data: {
-        interviewId: interview.id,
-        content: chosen.question,
-        rubric: chosen.rubric,
-        isFollowUp: Boolean(followUp),
-        order: answeredCount + 1,
-      },
-    })
 
     return NextResponse.json({
       finished: false,
       // Text only. Sending the whole object would ship the rubric to the
       // browser and hand the candidate the answer key.
-      nextQuestion: chosen.question,
-      nextQuestionId: newQuestion.id,
-      isFollowUp: Boolean(followUp),
-      evaluation: forClient(evaluation),
+      nextQuestion: outcome.nextQuestion,
+      nextQuestionId: outcome.nextQuestionId,
+      isFollowUp: outcome.isFollowUp,
+      evaluation: forClient(outcome.evaluation),
     })
   } catch (error) {
     return serverError("POST /api/interview/[id]/question", error)

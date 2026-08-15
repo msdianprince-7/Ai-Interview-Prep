@@ -8,12 +8,12 @@ import {
 import {
   badRequest,
   getCurrentUser,
-  getResumeContent,
   modelUnavailable,
   serverError,
   tooManyRequests,
   unauthorized,
 } from "@/lib/api"
+import { getResumeContent } from "@/lib/resume"
 import { rateLimit } from "@/lib/rate-limit"
 import { createInterviewSchema, firstError } from "@/lib/validation"
 
