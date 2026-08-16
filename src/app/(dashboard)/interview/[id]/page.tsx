@@ -4,6 +4,13 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition"
 
+function scoreColor(score: number) {
+  if (score >= 8) return "#22c55e"
+  if (score >= 6) return "#60a5fa"
+  if (score >= 4) return "#f59e0b"
+  return "#ef4444"
+}
+
 interface Evaluation {
   score: number
   feedback: string
@@ -40,6 +47,11 @@ export default function InterviewPage() {
   const [loadError, setLoadError] = useState("")
   const [submitError, setSubmitError] = useState("")
   const [isFollowUp, setIsFollowUp] = useState(false)
+  const [pendingQuestion, setPendingQuestion] = useState<{
+    question: string
+    questionId: string
+    isFollowUp: boolean
+  } | null>(null)
   const [pastQuestions, setPastQuestions] = useState<PastQuestion[]>([])
   const [mode, setMode] = useState<"text" | "voice">("text")
   const [speaking, setSpeaking] = useState(false)
@@ -195,20 +207,31 @@ export default function InterviewPage() {
         .then((full) => setPastQuestions(full?.questions ?? []))
         .catch(() => setPastQuestions([]))
     } else {
+      // Hold the feedback on screen and park the next question until the
+      // candidate chooses to continue. It used to advance on a 3s timer, which
+      // was not long enough to read the score and feedback.
       setFeedback(data.evaluation)
-      setTimeout(() => {
-        setQuestion(data.nextQuestion)
-        setQuestionId(data.nextQuestionId)
-        setIsFollowUp(Boolean(data.isFollowUp))
-        setAnswer("")
-        resetTranscript()
-        setQuestionNumber((prev) => prev + 1)
-        setFeedback(null)
-        setLoading(false)
-      }, 3000)
+      setPendingQuestion({
+        question: data.nextQuestion,
+        questionId: data.nextQuestionId,
+        isFollowUp: Boolean(data.isFollowUp),
+      })
     }
 
     setLoading(false)
+  }
+
+  const handleContinue = () => {
+    if (!pendingQuestion) return
+
+    setQuestion(pendingQuestion.question)
+    setQuestionId(pendingQuestion.questionId)
+    setIsFollowUp(pendingQuestion.isFollowUp)
+    setPendingQuestion(null)
+    setAnswer("")
+    resetTranscript()
+    setQuestionNumber((prev) => prev + 1)
+    setFeedback(null)
   }
 
   if (initialLoading) {
@@ -412,9 +435,43 @@ export default function InterviewPage() {
         )}
 
         {feedback && (
-          <div style={{ background: "#0f2a0f", border: "1px solid #22c55e", borderRadius: "12px", padding: "20px", marginBottom: "24px" }}>
-            <div style={{ color: "#22c55e", fontWeight: "600", marginBottom: "8px" }}>Score: {feedback.score}/10</div>
-            <p style={{ color: "#ccc", fontSize: "14px", lineHeight: "1.6" }}>{feedback.feedback}</p>
+          <div style={{ background: "#0f2a0f", border: `1px solid ${scoreColor(feedback.score)}`, borderRadius: "12px", padding: "20px", marginBottom: "24px" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginBottom: "10px" }}>
+              <div style={{ color: scoreColor(feedback.score), fontWeight: "700", fontSize: "20px" }}>
+                {feedback.score}/10
+              </div>
+              <div style={{ color: "#888", fontSize: "13px" }}>Your answer to question {questionNumber}</div>
+            </div>
+
+            <p style={{ color: "#ddd", fontSize: "14px", lineHeight: "1.6", marginBottom: "12px" }}>{feedback.feedback}</p>
+
+            {feedback.strengths && feedback.strengths.length > 0 && (
+              <div style={{ marginBottom: "10px" }}>
+                <div style={{ color: "#22c55e", fontWeight: "600", fontSize: "12px", marginBottom: "4px" }}>✅ Strengths</div>
+                {feedback.strengths.map((s: string, i: number) => (
+                  <div key={i} style={{ color: "#ccc", fontSize: "13px", lineHeight: "1.6" }}>• {s}</div>
+                ))}
+              </div>
+            )}
+
+            {feedback.improvements && feedback.improvements.length > 0 && (
+              <div style={{ marginBottom: "16px" }}>
+                <div style={{ color: "#f59e0b", fontWeight: "600", fontSize: "12px", marginBottom: "4px" }}>🎯 To improve</div>
+                {feedback.improvements.map((s: string, i: number) => (
+                  <div key={i} style={{ color: "#ccc", fontSize: "13px", lineHeight: "1.6" }}>• {s}</div>
+                ))}
+              </div>
+            )}
+
+            {/* Advancing is an explicit choice; the feedback stays until then. */}
+            {pendingQuestion && (
+              <button
+                onClick={handleContinue}
+                style={{ width: "100%", padding: "12px", background: "#2563eb", color: "white", border: "none", borderRadius: "8px", fontSize: "15px", fontWeight: "600", cursor: "pointer" }}
+              >
+                {pendingQuestion.isFollowUp ? "Continue to follow-up →" : "Next question →"}
+              </button>
+            )}
           </div>
         )}
 
