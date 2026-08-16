@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { Alert, Button, Card, Page } from "@/components/ui/shell"
 
 const roles = [
   "Frontend Developer",
@@ -14,7 +16,13 @@ const roles = [
   "Software Engineer",
 ]
 
-const difficulties = ["Easy", "Medium", "Hard"]
+const difficulties = ["Easy", "Medium", "Hard"] as const
+
+const difficultyClasses: Record<string, string> = {
+  Easy: "border-good bg-good-deep text-good-fg",
+  Medium: "border-brand-strong bg-brand-deep text-brand",
+  Hard: "border-bad bg-bad-bg text-bad-fg",
+}
 
 export default function NewInterviewPage() {
   const router = useRouter()
@@ -35,162 +43,111 @@ export default function NewInterviewPage() {
   }, [])
 
   const handleStart = async () => {
-  if (!role || !difficulty) {
-    setError("Please select both role and difficulty")
-    return
-  }
-
-  setLoading(true)
-  setError("")
-
-  try {
-    const res = await fetch("/api/interview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // Only meaningful when a resume exists; the server ignores it otherwise.
-      body: JSON.stringify({ role, difficulty, useResume })
-    })
-
-    const text = await res.text()
-    
-    if (!text) {
-      setError("Server returned empty response")
-      setLoading(false)
+    if (!role || !difficulty) {
+      setError("Please select both role and difficulty")
       return
     }
 
-    const data = JSON.parse(text)
+    setLoading(true)
+    setError("")
 
-    if (!res.ok) {
-      setError(data.error || "Failed to start interview")
+    try {
+      const res = await fetch("/api/interview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Only meaningful when a resume exists; the server ignores it otherwise.
+        body: JSON.stringify({ role, difficulty, useResume }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setError(data.error || "Failed to start interview")
+        setLoading(false)
+        return
+      }
+
+      router.push(`/interview/${data.interviewId}`)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong")
       setLoading(false)
-      return
     }
-
-    router.push(`/interview/${data.interviewId}`)
-  } catch (err: unknown) {
-    setError(err instanceof Error ? err.message : "Something went wrong")
-    setLoading(false)
   }
-}
 
   return (
-    <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", fontFamily: "Arial", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: "100%", maxWidth: "600px", padding: "0 16px" }}>
-
-        <div style={{ textAlign: "center", marginBottom: "40px" }}>
-          <a href="/dashboard" style={{ color: "#888", textDecoration: "none", fontSize: "14px" }}>
+    <Page center>
+      <div className="w-full max-w-xl px-4 py-10">
+        <div className="mb-8 text-center">
+          <Link href="/dashboard" className="text-sm text-muted hover:text-white">
             ← Back to Dashboard
-          </a>
-          <h1 style={{ fontSize: "28px", fontWeight: "bold", marginTop: "16px", marginBottom: "8px" }}>
-            Start New Interview
-          </h1>
-          <p style={{ color: "#888" }}>Choose your role and difficulty to begin</p>
+          </Link>
+          <h1 className="mt-4 mb-2 text-2xl font-bold sm:text-3xl">Start New Interview</h1>
+          <p className="text-muted">Choose your role and difficulty to begin</p>
         </div>
 
-        <div style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "32px" }}>
-          {error && (
-            <div style={{ background: "#2d1515", border: "1px solid #ef4444", color: "#ef4444", padding: "12px", borderRadius: "8px", marginBottom: "24px", fontSize: "14px" }}>
-              {error}
-            </div>
-          )}
+        <Card>
+          {error && <Alert>{error}</Alert>}
 
-          {/* Resume status */}
           {resumeFilename ? (
             <button
               type="button"
               role="switch"
               aria-checked={useResume}
               onClick={() => setUseResume((prev) => !prev)}
-              style={{
-                width: "100%",
-                textAlign: "left",
-                background: useResume ? "#0f2a0f" : "#1a1a2e",
-                border: `1px solid ${useResume ? "#22c55e" : "#333"}`,
-                borderRadius: "8px",
-                padding: "14px 16px",
-                marginBottom: "24px",
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                cursor: "pointer",
-                color: "white",
-              }}
+              className={`mb-6 flex w-full cursor-pointer items-center gap-3 rounded-lg border p-4 text-left ${
+                useResume ? "border-good bg-good-bg" : "border-line-2 bg-surface-2"
+              }`}
             >
-              <div style={{ fontSize: "20px" }}>📄</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: useResume ? "#86efac" : "#ccc", fontSize: "14px", fontWeight: "600" }}>
+              <span className="text-xl">📄</span>
+              <span className="flex-1">
+                <span className={`block text-sm font-semibold ${useResume ? "text-good-fg" : "text-body"}`}>
                   {useResume ? "Personalized from your resume" : "Resume turned off"}
-                </div>
-                <div style={{ color: "#888", fontSize: "12px", marginTop: "2px" }}>
+                </span>
+                <span className="mt-0.5 block text-xs break-words text-muted">
                   {useResume
                     ? `Questions will reference ${resumeFilename}`
                     : "Using general questions for this role"}
-                </div>
-              </div>
-              {/* Switch track */}
-              <div
-                style={{
-                  width: "40px",
-                  height: "22px",
-                  borderRadius: "11px",
-                  background: useResume ? "#22c55e" : "#333",
-                  padding: "2px",
-                  flexShrink: 0,
-                  transition: "background 0.2s",
-                }}
+                </span>
+              </span>
+              <span
+                className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition-colors ${
+                  useResume ? "bg-good" : "bg-line-2"
+                }`}
               >
-                <div
-                  style={{
-                    width: "18px",
-                    height: "18px",
-                    borderRadius: "50%",
-                    background: "white",
-                    transform: useResume ? "translateX(18px)" : "translateX(0)",
-                    transition: "transform 0.2s",
-                  }}
+                <span
+                  className={`block h-5 w-5 rounded-full bg-white transition-transform ${
+                    useResume ? "translate-x-5" : "translate-x-0"
+                  }`}
                 />
-              </div>
+              </span>
             </button>
           ) : (
-            <div style={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: "8px", padding: "14px 16px", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line-2 bg-surface-2 p-4">
               <div>
-                <div style={{ color: "#ccc", fontSize: "14px", fontWeight: "600" }}>
-                  Using general questions
-                </div>
-                <div style={{ color: "#888", fontSize: "12px", marginTop: "2px" }}>
+                <div className="text-sm font-semibold text-body">Using general questions</div>
+                <div className="mt-0.5 text-xs text-muted">
                   Upload a resume to get questions about your own experience
                 </div>
               </div>
-              <button
-                onClick={() => router.push("/resume")}
-                style={{ padding: "8px 14px", background: "transparent", border: "1px solid #333", color: "#60a5fa", borderRadius: "6px", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap" }}
-              >
+              <Button variant="ghost" onClick={() => router.push("/resume")}>
                 Upload
-              </button>
+              </Button>
             </div>
           )}
 
-          {/* Role Selection */}
-          <div style={{ marginBottom: "28px" }}>
-            <label style={{ display: "block", marginBottom: "12px", fontWeight: "600" }}>
-              Select Role
-            </label>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
+          <div className="mb-7">
+            <label className="mb-3 block font-semibold">Select Role</label>
+            {/* Single column on phones so role names never truncate. */}
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               {roles.map((r) => (
                 <button
                   key={r}
                   onClick={() => setRole(r)}
-                  style={{
-                    padding: "12px",
-                    background: role === r ? "#1e3a5f" : "#1a1a1a",
-                    border: role === r ? "1px solid #2563eb" : "1px solid #333",
-                    borderRadius: "8px",
-                    color: role === r ? "#93c5fd" : "#ccc",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    textAlign: "left"
-                  }}
+                  className={`cursor-pointer rounded-lg border p-3 text-left text-[13px] transition-colors ${
+                    role === r
+                      ? "border-brand-strong bg-brand-deep text-brand"
+                      : "border-line-2 bg-surface-2 text-body hover:bg-line"
+                  }`}
                 >
                   {r}
                 </button>
@@ -198,26 +155,18 @@ export default function NewInterviewPage() {
             </div>
           </div>
 
-          {/* Difficulty Selection */}
-          <div style={{ marginBottom: "32px" }}>
-            <label style={{ display: "block", marginBottom: "12px", fontWeight: "600" }}>
-              Select Difficulty
-            </label>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
+          <div className="mb-8">
+            <label className="mb-3 block font-semibold">Select Difficulty</label>
+            <div className="grid grid-cols-3 gap-2.5">
               {difficulties.map((d) => (
                 <button
                   key={d}
                   onClick={() => setDifficulty(d)}
-                  style={{
-                    padding: "12px",
-                    background: difficulty === d ? (d === "Easy" ? "#14532d" : d === "Medium" ? "#1e3a5f" : "#2d1515") : "#1a1a1a",
-                    border: difficulty === d ? `1px solid ${d === "Easy" ? "#22c55e" : d === "Medium" ? "#2563eb" : "#ef4444"}` : "1px solid #333",
-                    borderRadius: "8px",
-                    color: difficulty === d ? (d === "Easy" ? "#86efac" : d === "Medium" ? "#93c5fd" : "#fca5a5") : "#ccc",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "600"
-                  }}
+                  className={`cursor-pointer rounded-lg border p-3 text-sm font-semibold transition-colors ${
+                    difficulty === d
+                      ? difficultyClasses[d]
+                      : "border-line-2 bg-surface-2 text-body hover:bg-line"
+                  }`}
                 >
                   {d}
                 </button>
@@ -225,25 +174,11 @@ export default function NewInterviewPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleStart}
-            disabled={loading}
-            style={{
-              width: "100%",
-              padding: "14px",
-              background: loading ? "#1d4ed8" : "#2563eb",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              fontSize: "16px",
-              fontWeight: "600",
-              cursor: loading ? "not-allowed" : "pointer"
-            }}
-          >
+          <Button full onClick={handleStart} disabled={loading}>
             {loading ? "Starting Interview..." : "🤖 Start Interview"}
-          </button>
-        </div>
+          </Button>
+        </Card>
       </div>
-    </main>
+    </Page>
   )
 }

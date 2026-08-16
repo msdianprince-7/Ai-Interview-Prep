@@ -3,10 +3,17 @@
 import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import {
+  Badge,
+  Button,
+  Card,
+  Container,
+  EmptyState,
+  Page,
+  Spinner,
+  TopBar,
+} from "@/components/ui/shell"
 
-export default function DashboardPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
 interface Interview {
   id: string
   role: string
@@ -16,12 +23,20 @@ interface Interview {
   createdAt: string
 }
 
-const [interviews, setInterviews] = useState<Interview[]>([])
+const ACTIONS = [
+  { href: "/interview/new", icon: "🤖", title: "Start New Interview", desc: "Practice with AI interviewer", primary: true },
+  { href: "/resume", icon: "📄", title: "Upload Resume", desc: "Get personalized questions" },
+  { href: "/history", icon: "📋", title: "Interview History", desc: "Review past sessions" },
+  { href: "/analytics", icon: "📈", title: "Analytics", desc: "Track your progress" },
+]
+
+export default function DashboardPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const [interviews, setInterviews] = useState<Interview[]>([])
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login")
-    }
+    if (status === "unauthenticated") router.push("/login")
   }, [status, router])
 
   useEffect(() => {
@@ -29,142 +44,106 @@ const [interviews, setInterviews] = useState<Interview[]>([])
       fetch("/api/interviews")
         .then((res) => res.json())
         .then((data) => setInterviews(data.interviews || []))
+        .catch(() => setInterviews([]))
     }
   }, [status])
 
-  if (status === "loading") {
-    return (
-      <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Arial" }}>
-        <p style={{ color: "#888" }}>Loading...</p>
-      </main>
-    )
-  }
+  if (status === "loading") return <Spinner label="Loading..." />
+  if (status === "unauthenticated") return null
 
-  if (status === "unauthenticated") {
-    return null
-  }
+  const scored = interviews.filter((i) => i.score !== null)
+  const avg = scored.length
+    ? Math.round(scored.reduce((a, b) => a + (b.score ?? 0), 0) / scored.length)
+    : null
+
+  const stats = [
+    { label: "Total Interviews", value: interviews.length, icon: "🎯" },
+    { label: "Completed", value: interviews.filter((i) => i.status === "completed").length, icon: "✅" },
+    { label: "Avg Score", value: avg !== null ? `${avg}/10` : "N/A", icon: "📊" },
+  ]
 
   return (
-    <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", fontFamily: "Arial" }}>
+    <Page>
+      <TopBar>
+        <span className="text-sm text-muted">Hi, {session?.user?.name}</span>
+        <Button variant="ghost" onClick={() => signOut({ callbackUrl: "/" })}>
+          Sign Out
+        </Button>
+      </TopBar>
 
-      {/* Navbar */}
-      <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 32px", borderBottom: "1px solid #222" }}>
-        <div style={{ color: "#60a5fa", fontSize: "20px", fontWeight: "bold" }}>InterviewAI</div>
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <span style={{ color: "#888", fontSize: "14px" }}>Hi, {session?.user?.name}</span>
-          <button
-            onClick={() => signOut({ callbackUrl: "/" })}
-            style={{ padding: "8px 16px", background: "transparent", border: "1px solid #333", color: "#ccc", borderRadius: "8px", cursor: "pointer", fontSize: "14px" }}
-          >
-            Sign Out
-          </button>
-        </div>
-      </nav>
-
-      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "40px 32px" }}>
-
-        {/* Welcome */}
-        <div style={{ marginBottom: "40px" }}>
-          <h1 style={{ fontSize: "28px", fontWeight: "bold", marginBottom: "8px" }}>
+      <Container size="xl">
+        <div className="mb-8">
+          <h1 className="mb-2 text-2xl font-bold sm:text-3xl">
             Welcome back, {session?.user?.name?.split(" ")[0]} 👋
           </h1>
-          <p style={{ color: "#888" }}>Ready to practice your next interview?</p>
+          <p className="text-muted">Ready to practice your next interview?</p>
         </div>
 
-        {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "40px" }}>
-          {[
-            { label: "Total Interviews", value: interviews.length, icon: "🎯" },
-            { label: "Completed", value: interviews.filter((i) => i.status === "completed").length, icon: "✅" },
-            { label: "Avg Score", value: interviews.length ? Math.round(interviews.filter(i => i.score).reduce((a, b) => a + (b.score ?? 0), 0) / (interviews.filter(i => i.score).length || 1)) + "/10" : "N/A", icon: "📊" },
-          ].map((stat) => (
-            <div key={stat.label} style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "24px" }}>
-              <div style={{ fontSize: "28px", marginBottom: "8px" }}>{stat.icon}</div>
-              <div style={{ fontSize: "28px", fontWeight: "bold", marginBottom: "4px" }}>{stat.value}</div>
-              <div style={{ color: "#888", fontSize: "14px" }}>{stat.label}</div>
-            </div>
+        {/* Stacked on phones, three across from small screens up. */}
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {stats.map((s) => (
+            <Card key={s.label}>
+              <div className="mb-2 text-2xl">{s.icon}</div>
+              <div className="mb-1 text-2xl font-bold">{s.value}</div>
+              <div className="text-sm text-muted">{s.label}</div>
+            </Card>
           ))}
         </div>
 
-        {/* Quick Actions */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "40px" }}>
-          <button
-            onClick={() => router.push("/interview/new")}
-            style={{ padding: "24px", background: "#1e3a5f", border: "1px solid #2563eb", borderRadius: "12px", color: "white", cursor: "pointer", textAlign: "left" }}
-          >
-            <div style={{ fontSize: "32px", marginBottom: "12px" }}>🤖</div>
-            <div style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Start New Interview</div>
-            <div style={{ color: "#93c5fd", fontSize: "14px" }}>Practice with AI interviewer</div>
-          </button>
-
-          <button
-            onClick={() => router.push("/resume")}
-            style={{ padding: "24px", background: "#1a1a2e", border: "1px solid #333", borderRadius: "12px", color: "white", cursor: "pointer", textAlign: "left" }}
-          >
-            <div style={{ fontSize: "32px", marginBottom: "12px" }}>📄</div>
-            <div style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Upload Resume</div>
-            <div style={{ color: "#888", fontSize: "14px" }}>Get personalized questions</div>
-          </button>
-
-          <button
-            onClick={() => router.push("/history")}
-            style={{ padding: "24px", background: "#1a1a2e", border: "1px solid #333", borderRadius: "12px", color: "white", cursor: "pointer", textAlign: "left" }}
-          >
-            <div style={{ fontSize: "32px", marginBottom: "12px" }}>📋</div>
-            <div style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Interview History</div>
-            <div style={{ color: "#888", fontSize: "14px" }}>Review past sessions</div>
-          </button>
-
-          <button
-            onClick={() => router.push("/analytics")}
-            style={{ padding: "24px", background: "#1a1a2e", border: "1px solid #333", borderRadius: "12px", color: "white", cursor: "pointer", textAlign: "left" }}
-          >
-            <div style={{ fontSize: "32px", marginBottom: "12px" }}>📈</div>
-            <div style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Analytics</div>
-            <div style={{ color: "#888", fontSize: "14px" }}>Track your progress</div>
-          </button>
+        <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {ACTIONS.map((a) => (
+            <button
+              key={a.href}
+              onClick={() => router.push(a.href)}
+              className={`cursor-pointer rounded-xl border p-6 text-left transition-colors ${
+                a.primary
+                  ? "border-brand-strong bg-brand-deep hover:bg-brand-deep/80"
+                  : "border-line-2 bg-surface hover:bg-surface-2"
+              }`}
+            >
+              <div className="mb-3 text-3xl">{a.icon}</div>
+              <div className="mb-1 text-lg font-semibold">{a.title}</div>
+              <div className={`text-sm ${a.primary ? "text-brand" : "text-muted"}`}>
+                {a.desc}
+              </div>
+            </button>
+          ))}
         </div>
 
-        {/* Recent Interviews */}
-        <div>
-          <h2 style={{ fontSize: "20px", fontWeight: "600", marginBottom: "16px" }}>Recent Interviews</h2>
-          {interviews.length === 0 ? (
-            <div style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
-              <div style={{ fontSize: "48px", marginBottom: "16px" }}>🎯</div>
-              <p style={{ color: "#888", marginBottom: "16px" }}>No interviews yet. Start your first one!</p>
+        <h2 className="mb-4 text-xl font-semibold">Recent Interviews</h2>
+        {interviews.length === 0 ? (
+          <EmptyState
+            icon="🎯"
+            title="No interviews yet. Start your first one!"
+            action={<Button onClick={() => router.push("/interview/new")}>Start Interview</Button>}
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {interviews.slice(0, 5).map((interview) => (
               <button
-                onClick={() => router.push("/interview/new")}
-                style={{ padding: "10px 24px", background: "#2563eb", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}
+                key={interview.id}
+                onClick={() => router.push(`/interview/${interview.id}`)}
+                className="flex cursor-pointer flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-5 text-left hover:bg-surface-2"
               >
-                Start Interview
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              {interviews.slice(0, 5).map((interview) => (
-                <div
-                  key={interview.id}
-                  onClick={() => router.push(`/interview/${interview.id}`)}
-                  style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
-                >
-                  <div>
-                    <div style={{ fontWeight: "600", marginBottom: "4px" }}>{interview.role}</div>
-                    <div style={{ color: "#888", fontSize: "14px" }}>{interview.difficulty} • {new Date(interview.createdAt).toLocaleDateString()}</div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    {interview.score && (
-                      <div style={{ color: "#60a5fa", fontWeight: "bold" }}>{interview.score}/10</div>
-                    )}
-                    <div style={{ padding: "4px 12px", borderRadius: "20px", fontSize: "12px", background: interview.status === "completed" ? "#14532d" : "#1e3a5f", color: interview.status === "completed" ? "#86efac" : "#93c5fd" }}>
-                      {interview.status}
-                    </div>
+                <div>
+                  <div className="mb-1 font-semibold">{interview.role}</div>
+                  <div className="text-sm text-muted">
+                    {interview.difficulty} • {new Date(interview.createdAt).toLocaleDateString()}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </main>
+                <div className="flex items-center gap-3">
+                  {interview.score !== null && (
+                    <span className="font-bold text-brand">{interview.score}/10</span>
+                  )}
+                  <Badge tone={interview.status === "completed" ? "good" : "brand"}>
+                    {interview.status}
+                  </Badge>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </Container>
+    </Page>
   )
 }

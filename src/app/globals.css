@@ -1,1 +1,44 @@
 @import "tailwindcss";
+
+/*
+ * The palette was previously repeated as raw hex in inline styles on every
+ * page. Defining it once as theme tokens means Tailwind generates the
+ * utilities (bg-surface, border-line, text-muted, ...) and a colour change
+ * happens in one place.
+ */
+@theme {
+  --color-ink: #0a0a0a; /* page background */
+  --color-surface: #111111; /* cards */
+  --color-surface-2: #1a1a1a; /* inputs, secondary buttons */
+  --color-line: #222222; /* hairline borders */
+  --color-line-2: #333333; /* stronger borders */
+
+  --color-muted: #888888;
+  --color-body: #cccccc;
+
+  --color-brand: #60a5fa;
+  --color-brand-strong: #2563eb;
+  --color-brand-deep: #1e3a5f;
+
+  --color-good: #22c55e;
+  --color-good-bg: #0f2a0f;
+  --color-good-fg: #86efac;
+  --color-good-deep: #14532d;
+
+  --color-warn: #f59e0b;
+  --color-warn-fg: #fbbf24;
+  --color-warn-bg: #3b2f0b;
+
+  --color-bad: #ef4444;
+  --color-bad-bg: #2d1515;
+  --color-bad-fg: #fca5a5;
+}
+
+html,
+body {
+  background: var(--color-ink);
+  color: #ffffff;
+  /* Stops long questions, rubrics and pasted answers forcing a sideways
+     scroll on narrow screens. */
+  overflow-x: hidden;
+}

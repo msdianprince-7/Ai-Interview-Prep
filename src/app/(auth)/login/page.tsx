@@ -4,16 +4,13 @@ import { Suspense, useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import { Alert, Button, Card, Field, Page } from "@/components/ui/shell"
 
 // useSearchParams opts the subtree out of prerendering, so it is isolated
 // behind a Suspense boundary to keep the build from failing.
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <main style={{ minHeight: "100vh", background: "#0a0a0a" }} />
-      }
-    >
+    <Suspense fallback={<div className="min-h-screen bg-ink" />}>
       <LoginForm />
     </Suspense>
   )
@@ -55,70 +52,53 @@ function LoginForm() {
   }
 
   return (
-    <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", fontFamily: "Arial", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: "100%", maxWidth: "400px", padding: "0 16px" }}>
-
-        <div style={{ textAlign: "center", marginBottom: "32px" }}>
-          <Link href="/" style={{ color: "#60a5fa", fontSize: "24px", fontWeight: "bold", textDecoration: "none" }}>
+    <Page center>
+      <div className="w-full max-w-sm px-4 py-10">
+        <div className="mb-8 text-center">
+          <Link href="/" className="text-2xl font-bold text-brand">
             InterviewAI
           </Link>
-          <h1 style={{ fontSize: "24px", fontWeight: "bold", marginTop: "16px" }}>Welcome back</h1>
-          <p style={{ color: "#888", marginTop: "8px" }}>Sign in to your account</p>
+          <h1 className="mt-4 text-2xl font-bold">Welcome back</h1>
+          <p className="mt-2 text-muted">Sign in to your account</p>
         </div>
 
-        <div style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "32px" }}>
-          {error && (
-            <div style={{ background: "#2d1515", border: "1px solid #ef4444", color: "#ef4444", padding: "12px", borderRadius: "8px", marginBottom: "16px", fontSize: "14px" }}>
-              {error}
-            </div>
-          )}
+        <Card>
+          {error && <Alert>{error}</Alert>}
 
           <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: "16px" }}>
-              <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", color: "#ccc" }}>
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@example.com"
-                style={{ width: "100%", padding: "10px 12px", background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "white", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
-              />
-            </div>
+            <Field
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              placeholder="you@example.com"
+            />
 
-            <div style={{ marginBottom: "24px" }}>
-              <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", color: "#ccc" }}>
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                style={{ width: "100%", padding: "10px 12px", background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "white", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
-              />
-            </div>
+            <Field
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              placeholder="Your password"
+            />
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={{ width: "100%", padding: "12px", background: loading ? "#1d4ed8" : "#2563eb", color: "white", border: "none", borderRadius: "8px", fontSize: "16px", fontWeight: "600", cursor: loading ? "not-allowed" : "pointer" }}
-            >
+            <Button type="submit" full disabled={loading} className="mt-2">
               {loading ? "Signing in..." : "Sign In"}
-            </button>
+            </Button>
           </form>
-        </div>
+        </Card>
 
-        <p style={{ textAlign: "center", marginTop: "24px", color: "#888", fontSize: "14px" }}>
+        <p className="mt-6 text-center text-sm text-muted">
           Don&apos;t have an account?{" "}
-          <a href="/register" style={{ color: "#60a5fa", textDecoration: "none" }}>
+          <Link href="/register" className="text-brand hover:underline">
             Create one
-          </a>
+          </Link>
         </p>
       </div>
-    </main>
+    </Page>
   )
 }

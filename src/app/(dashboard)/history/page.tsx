@@ -2,6 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import {
+  Badge,
+  Button,
+  Card,
+  Container,
+  EmptyState,
+  Page,
+  Spinner,
+  TopBar,
+} from "@/components/ui/shell"
 
 interface Question {
   id: string
@@ -10,6 +20,7 @@ interface Question {
   score: number | null
   feedback: string | null
   order: number
+  isFollowUp?: boolean
 }
 
 interface Interview {
@@ -23,6 +34,19 @@ interface Interview {
   questions: Question[]
 }
 
+function scoreColor(score: number) {
+  if (score >= 8) return "text-good"
+  if (score >= 6) return "text-brand"
+  if (score >= 4) return "text-warn"
+  return "text-bad"
+}
+
+function difficultyTone(difficulty: string) {
+  if (difficulty === "Easy") return "good" as const
+  if (difficulty === "Medium") return "brand" as const
+  return "bad" as const
+}
+
 export default function HistoryPage() {
   const router = useRouter()
   const [interviews, setInterviews] = useState<Interview[]>([])
@@ -30,165 +54,137 @@ export default function HistoryPage() {
   const [expanded, setExpanded] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch("/api/interviews?include=questions")
+    fetch("/api/interviews")
       .then((res) => res.json())
       .then((data) => {
         setInterviews(data.interviews || [])
         setLoading(false)
       })
+      .catch(() => setLoading(false))
   }, [])
 
-  const getDifficultyColor = (difficulty: string) => {
-    if (difficulty === "Easy") return { bg: "#14532d", color: "#86efac", border: "#22c55e" }
-    if (difficulty === "Medium") return { bg: "#1e3a5f", color: "#93c5fd", border: "#2563eb" }
-    return { bg: "#2d1515", color: "#fca5a5", border: "#ef4444" }
-  }
-
-  const getScoreColor = (score: number) => {
-    if (score >= 8) return "#22c55e"
-    if (score >= 6) return "#60a5fa"
-    if (score >= 4) return "#f59e0b"
-    return "#ef4444"
-  }
-
-  if (loading) {
-    return (
-      <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Arial" }}>
-        <p style={{ color: "#888" }}>Loading history...</p>
-      </main>
-    )
-  }
+  if (loading) return <Spinner label="Loading history..." />
 
   return (
-    <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", fontFamily: "Arial" }}>
-      <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 32px", borderBottom: "1px solid #222" }}>
-        <div style={{ color: "#60a5fa", fontSize: "20px", fontWeight: "bold" }}>InterviewAI</div>
-        <button
-          onClick={() => router.push("/dashboard")}
-          style={{ padding: "8px 16px", background: "transparent", border: "1px solid #333", color: "#ccc", borderRadius: "8px", cursor: "pointer" }}
-        >
+    <Page>
+      <TopBar>
+        <Button variant="ghost" onClick={() => router.push("/dashboard")}>
           ← Dashboard
-        </button>
-      </nav>
+        </Button>
+      </TopBar>
 
-      <div style={{ maxWidth: "900px", margin: "0 auto", padding: "40px 32px" }}>
-        <div style={{ marginBottom: "40px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <Container>
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 style={{ fontSize: "28px", fontWeight: "bold", marginBottom: "8px" }}>Interview History</h1>
-            <p style={{ color: "#888" }}>{interviews.length} total interviews</p>
+            <h1 className="mb-2 text-2xl font-bold sm:text-3xl">Interview History</h1>
+            <p className="text-muted">{interviews.length} total interviews</p>
           </div>
-          <button
-            onClick={() => router.push("/interview/new")}
-            style={{ padding: "10px 20px", background: "#2563eb", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}
-          >
-            + New Interview
-          </button>
+          <Button onClick={() => router.push("/interview/new")}>+ New Interview</Button>
         </div>
 
         {interviews.length === 0 ? (
-          <div style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "60px", textAlign: "center" }}>
-            <div style={{ fontSize: "48px", marginBottom: "16px" }}>📋</div>
-            <p style={{ color: "#888", marginBottom: "16px" }}>No interviews yet</p>
-            <button
-              onClick={() => router.push("/interview/new")}
-              style={{ padding: "10px 24px", background: "#2563eb", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}
-            >
-              Start First Interview
-            </button>
-          </div>
+          <EmptyState
+            icon="📋"
+            title="No interviews yet"
+            action={
+              <Button onClick={() => router.push("/interview/new")}>
+                Start First Interview
+              </Button>
+            }
+          />
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div className="flex flex-col gap-4">
             {interviews.map((interview) => {
-              const diffStyle = getDifficultyColor(interview.difficulty)
               const isExpanded = expanded === interview.id
 
               return (
                 <div
                   key={interview.id}
-                  style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", overflow: "hidden" }}
+                  className="overflow-hidden rounded-xl border border-line bg-surface"
                 >
-                  {/* Header */}
-                  <div
+                  <button
                     onClick={() => setExpanded(isExpanded ? null : interview.id)}
-                    style={{ padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+                    aria-expanded={isExpanded}
+                    className="flex w-full cursor-pointer flex-wrap items-center justify-between gap-4 p-5 text-left hover:bg-surface-2"
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                      <div style={{ fontSize: "32px" }}>🤖</div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-3xl">🤖</div>
                       <div>
-                        <div style={{ fontWeight: "600", fontSize: "16px", marginBottom: "6px" }}>
-                          {interview.role}
-                        </div>
-                        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                          <span style={{ padding: "2px 10px", borderRadius: "20px", fontSize: "12px", background: diffStyle.bg, color: diffStyle.color, border: `1px solid ${diffStyle.border}` }}>
+                        <div className="mb-1.5 font-semibold">{interview.role}</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone={difficultyTone(interview.difficulty)}>
                             {interview.difficulty}
+                          </Badge>
+                          <span className="text-xs text-muted">
+                            {new Date(interview.createdAt).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })}
                           </span>
-                          <span style={{ color: "#888", fontSize: "12px" }}>
-                            {new Date(interview.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-                          </span>
-                          <span style={{ padding: "2px 10px", borderRadius: "20px", fontSize: "12px", background: interview.status === "completed" ? "#14532d" : "#1e3a5f", color: interview.status === "completed" ? "#86efac" : "#93c5fd" }}>
+                          <Badge tone={interview.status === "completed" ? "good" : "brand"}>
                             {interview.status}
-                          </span>
+                          </Badge>
                         </div>
                       </div>
                     </div>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                    <div className="flex items-center gap-4">
                       {interview.score !== null && (
-                        <div style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: "24px", fontWeight: "bold", color: getScoreColor(interview.score) }}>
+                        <div className="text-center">
+                          <div className={`text-xl font-bold ${scoreColor(interview.score)}`}>
                             {interview.score}/10
                           </div>
-                          <div style={{ color: "#888", fontSize: "11px" }}>Score</div>
+                          <div className="text-[11px] text-muted">Score</div>
                         </div>
                       )}
-                      <div style={{ color: "#888", fontSize: "18px" }}>
-                        {isExpanded ? "▲" : "▼"}
-                      </div>
+                      <span className="text-muted">{isExpanded ? "▲" : "▼"}</span>
                     </div>
-                  </div>
+                  </button>
 
-                  {/* Expanded Questions */}
                   {isExpanded && (
-                    <div style={{ borderTop: "1px solid #222", padding: "24px" }}>
-                      <h3 style={{ fontWeight: "600", marginBottom: "16px", color: "#ccc" }}>
-                        Questions & Answers
-                      </h3>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    <div className="border-t border-line p-5">
+                      <h3 className="mb-4 font-semibold text-body">Questions &amp; Answers</h3>
+                      <div className="flex flex-col gap-4">
                         {interview.questions?.map((q, index) => (
-                          <div
-                            key={q.id}
-                            style={{ background: "#0a0a0a", border: "1px solid #222", borderRadius: "8px", padding: "16px" }}
-                          >
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                              <div style={{ color: "#60a5fa", fontSize: "13px", fontWeight: "600" }}>
-                                Question {index + 1}
+                          <Card key={q.id} className="bg-ink">
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-[13px] font-semibold text-brand">
+                                  Question {index + 1}
+                                </span>
+                                {q.isFollowUp && <Badge tone="warn">↳ Follow-up</Badge>}
                               </div>
                               {q.score !== null && (
-                                <div style={{ color: getScoreColor(q.score), fontWeight: "bold", fontSize: "14px" }}>
+                                <span className={`text-sm font-bold ${scoreColor(q.score)}`}>
                                   {q.score}/10
-                                </div>
+                                </span>
                               )}
                             </div>
-                            <p style={{ color: "#f0f0f0", marginBottom: "12px", lineHeight: "1.6", fontSize: "14px" }}>
+
+                            {/* break-words stops long unbroken answers overflowing on phones. */}
+                            <p className="mb-3 text-sm leading-relaxed break-words text-white/90">
                               {q.content}
                             </p>
+
                             {q.answer && (
-                              <div style={{ marginBottom: "12px" }}>
-                                <div style={{ color: "#888", fontSize: "12px", marginBottom: "4px" }}>Your Answer:</div>
-                                <p style={{ color: "#ccc", fontSize: "14px", lineHeight: "1.6", background: "#111", padding: "10px", borderRadius: "6px" }}>
+                              <div className="mb-3">
+                                <div className="mb-1 text-xs text-muted">Your Answer:</div>
+                                <p className="rounded-md bg-surface p-3 text-sm leading-relaxed break-words text-body">
                                   {q.answer}
                                 </p>
                               </div>
                             )}
+
                             {q.feedback && (
                               <div>
-                                <div style={{ color: "#888", fontSize: "12px", marginBottom: "4px" }}>Feedback:</div>
-                                <p style={{ color: "#ccc", fontSize: "13px", lineHeight: "1.6", fontStyle: "italic" }}>
+                                <div className="mb-1 text-xs text-muted">Feedback:</div>
+                                <p className="text-[13px] leading-relaxed break-words text-body italic">
                                   {q.feedback}
                                 </p>
                               </div>
                             )}
-                          </div>
+                          </Card>
                         ))}
                       </div>
                     </div>
@@ -198,7 +194,7 @@ export default function HistoryPage() {
             })}
           </div>
         )}
-      </div>
-    </main>
+      </Container>
+    </Page>
   )
 }

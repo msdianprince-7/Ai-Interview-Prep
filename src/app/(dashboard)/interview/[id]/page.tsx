@@ -3,12 +3,22 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition"
+import { Alert, Badge, Button, Card, Page } from "@/components/ui/shell"
 
-function scoreColor(score: number) {
-  if (score >= 8) return "#22c55e"
-  if (score >= 6) return "#60a5fa"
-  if (score >= 4) return "#f59e0b"
-  return "#ef4444"
+const TOTAL_QUESTIONS = 5
+
+function scoreText(score: number) {
+  if (score >= 8) return "text-good"
+  if (score >= 6) return "text-brand"
+  if (score >= 4) return "text-warn"
+  return "text-bad"
+}
+
+function scoreBorder(score: number) {
+  if (score >= 8) return "border-good"
+  if (score >= 6) return "border-brand"
+  if (score >= 4) return "border-warn"
+  return "border-bad"
 }
 
 interface Evaluation {
@@ -62,13 +72,11 @@ export default function InterviewPage() {
     transcript,
     listening,
     resetTranscript,
-    browserSupportsSpeechRecognition
+    browserSupportsSpeechRecognition,
   } = useSpeechRecognition()
 
   useEffect(() => {
-    if (mode === "voice" && transcript) {
-      setAnswer(transcript)
-    }
+    if (mode === "voice" && transcript) setAnswer(transcript)
   }, [transcript, mode])
 
   // Stop the countdown timer and any in-flight speech when leaving the page,
@@ -86,8 +94,6 @@ export default function InterviewPage() {
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.rate = 0.9
-    utterance.pitch = 1
-    utterance.volume = 1
     utterance.onstart = () => setSpeaking(true)
     utterance.onend = () => {
       setSpeaking(false)
@@ -141,9 +147,8 @@ export default function InterviewPage() {
   }, [interviewId])
 
   useEffect(() => {
-    if (question && mode === "voice" && !initialLoading) {
-      speakQuestion(question)
-    }
+    if (question && mode === "voice" && !initialLoading) speakQuestion(question)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question, mode, initialLoading])
 
   const handleModeSwitch = (newMode: "text" | "voice") => {
@@ -160,15 +165,11 @@ export default function InterviewPage() {
   }
 
   const handleStartListening = () => {
-  window.speechSynthesis.cancel()
-  setSpeaking(false)
-  resetTranscript()
-  setAnswer("")
-  SpeechRecognition.startListening({ continuous: true })
-}
-
-  const handleStopListening = () => {
-    SpeechRecognition.stopListening()
+    window.speechSynthesis.cancel()
+    setSpeaking(false)
+    resetTranscript()
+    setAnswer("")
+    SpeechRecognition.startListening({ continuous: true })
   }
 
   const handleSubmit = async () => {
@@ -182,7 +183,7 @@ export default function InterviewPage() {
     const res = await fetch(`/api/interview/${interviewId}/question`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer, currentQuestionId: questionId })
+      body: JSON.stringify({ answer, currentQuestionId: questionId }),
     })
 
     const data = await res.json().catch(() => ({}))
@@ -223,7 +224,6 @@ export default function InterviewPage() {
 
   const handleContinue = () => {
     if (!pendingQuestion) return
-
     setQuestion(pendingQuestion.question)
     setQuestionId(pendingQuestion.questionId)
     setIsFollowUp(pendingQuestion.isFollowUp)
@@ -236,107 +236,109 @@ export default function InterviewPage() {
 
   if (initialLoading) {
     return (
-      <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Arial" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🤖</div>
-          <p style={{ color: "#888" }}>Preparing your interview...</p>
+      <Page center>
+        <div className="text-center">
+          <div className="mb-4 text-5xl">🤖</div>
+          <p className="text-muted">Preparing your interview...</p>
         </div>
-      </main>
+      </Page>
     )
   }
 
   if (loadError) {
     return (
-      <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Arial" }}>
-        <div style={{ textAlign: "center", maxWidth: "400px", padding: "0 16px" }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔒</div>
-          <h1 style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "8px" }}>Interview unavailable</h1>
-          <p style={{ color: "#888", marginBottom: "24px" }}>{loadError}</p>
-          <button
-            onClick={() => router.push("/dashboard")}
-            style={{ padding: "12px 24px", background: "#2563eb", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}
-          >
-            Back to Dashboard
-          </button>
+      <Page center>
+        <div className="max-w-sm px-4 text-center">
+          <div className="mb-4 text-5xl">🔒</div>
+          <h1 className="mb-2 text-xl font-bold">Interview unavailable</h1>
+          <p className="mb-6 text-muted">{loadError}</p>
+          <Button onClick={() => router.push("/dashboard")}>Back to Dashboard</Button>
         </div>
-      </main>
+      </Page>
     )
   }
 
   if (finished) {
     return (
-      <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", fontFamily: "Arial", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ maxWidth: "600px", width: "100%", padding: "0 16px", textAlign: "center" }}>
-          <div style={{ fontSize: "64px", marginBottom: "16px" }}>
-            {finalScore >= 8 ? "🏆" : finalScore >= 6 ? "👍" : "💪"}
+      <Page>
+        <div className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-6">
+          <div className="text-center">
+            <div className="mb-4 text-6xl">
+              {finalScore >= 8 ? "🏆" : finalScore >= 6 ? "👍" : "💪"}
+            </div>
+            <h1 className="mb-2 text-2xl font-bold sm:text-3xl">Interview Complete!</h1>
+            <p className="mb-8 text-muted">Here is how you did</p>
           </div>
-          <h1 style={{ fontSize: "32px", fontWeight: "bold", marginBottom: "8px" }}>Interview Complete!</h1>
-          <p style={{ color: "#888", marginBottom: "32px" }}>Here is how you did</p>
-          <div style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "32px", marginBottom: "24px" }}>
-            <div style={{ fontSize: "64px", fontWeight: "bold", color: finalScore >= 8 ? "#22c55e" : finalScore >= 6 ? "#60a5fa" : "#f59e0b", marginBottom: "8px" }}>
+
+          <Card className="mb-6 text-center">
+            <div className={`mb-2 text-5xl font-bold ${scoreText(finalScore)}`}>
               {finalScore}/10
             </div>
-            <div style={{ color: "#888", marginBottom: "24px" }}>Overall Score</div>
+            <div className="mb-6 text-muted">Overall Score</div>
+
             {feedback && (
-              <div style={{ textAlign: "left" }}>
-                <p style={{ color: "#ccc", marginBottom: "16px", lineHeight: "1.6" }}>{feedback.feedback}</p>
+              <div className="text-left">
+                <p className="mb-4 leading-relaxed text-body">{feedback.feedback}</p>
+
                 {feedback.strengths && feedback.strengths.length > 0 && (
-                  <div style={{ marginBottom: "16px" }}>
-                    <div style={{ color: "#22c55e", fontWeight: "600", marginBottom: "8px" }}>✅ Strengths</div>
-                    {feedback.strengths.map((s: string, i: number) => (
-                      <div key={i} style={{ color: "#ccc", fontSize: "14px", marginBottom: "4px" }}>• {s}</div>
+                  <div className="mb-4">
+                    <div className="mb-2 font-semibold text-good">✅ Strengths</div>
+                    {feedback.strengths.map((s, i) => (
+                      <div key={i} className="mb-1 text-sm text-body">• {s}</div>
                     ))}
                   </div>
                 )}
+
                 {feedback.improvements && feedback.improvements.length > 0 && (
                   <div>
-                    <div style={{ color: "#f59e0b", fontWeight: "600", marginBottom: "8px" }}>🎯 Areas to Improve</div>
-                    {feedback.improvements.map((s: string, i: number) => (
-                      <div key={i} style={{ color: "#ccc", fontSize: "14px", marginBottom: "4px" }}>• {s}</div>
+                    <div className="mb-2 font-semibold text-warn">🎯 Areas to Improve</div>
+                    {feedback.improvements.map((s, i) => (
+                      <div key={i} className="mb-1 text-sm text-body">• {s}</div>
                     ))}
                   </div>
                 )}
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Read-only transcript, shown when revisiting a finished session. */}
           {pastQuestions.length > 0 && (
-            <div style={{ textAlign: "left", marginBottom: "24px" }}>
+            <div className="mb-6 flex flex-col gap-3">
               {pastQuestions.map((q) => (
-                <div key={q.id} style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "20px", marginBottom: "12px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ color: "#60a5fa", fontSize: "13px", fontWeight: "600" }}>Question {q.order}</div>
-                      {q.isFollowUp && (
-                        <span style={{ padding: "2px 8px", borderRadius: "20px", background: "#3b2f0b", border: "1px solid #f59e0b", color: "#fbbf24", fontSize: "10px", fontWeight: "600" }}>
-                          ↳ Follow-up
-                        </span>
-                      )}
+                <Card key={q.id}>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[13px] font-semibold text-brand">
+                        Question {q.order}
+                      </span>
+                      {q.isFollowUp && <Badge tone="warn">↳ Follow-up</Badge>}
                     </div>
                     {q.score !== null && (
-                      <div style={{ color: q.score >= 8 ? "#22c55e" : q.score >= 6 ? "#60a5fa" : "#f59e0b", fontSize: "13px", fontWeight: "600" }}>
+                      <span className={`text-sm font-semibold ${scoreText(q.score)}`}>
                         {q.score}/10
-                      </div>
+                      </span>
                     )}
                   </div>
-                  <p style={{ color: "#f0f0f0", fontSize: "15px", lineHeight: "1.6", marginBottom: "12px" }}>{q.content}</p>
+
+                  <p className="mb-3 leading-relaxed break-words text-white/90">{q.content}</p>
+
                   {q.answer && (
-                    <div style={{ background: "#0a0a0a", borderRadius: "8px", padding: "12px", marginBottom: "10px" }}>
-                      <div style={{ color: "#888", fontSize: "12px", marginBottom: "6px" }}>Your answer</div>
-                      <p style={{ color: "#ccc", fontSize: "14px", lineHeight: "1.6" }}>{q.answer}</p>
+                    <div className="mb-3 rounded-lg bg-ink p-3">
+                      <div className="mb-1.5 text-xs text-muted">Your answer</div>
+                      <p className="text-sm leading-relaxed break-words text-body">{q.answer}</p>
                     </div>
                   )}
+
                   {q.feedback && (
-                    <p style={{ color: "#888", fontSize: "13px", lineHeight: "1.6" }}>{q.feedback}</p>
+                    <p className="mb-3 text-[13px] leading-relaxed break-words text-muted">
+                      {q.feedback}
+                    </p>
                   )}
 
-                  {/* The grading key, released only after the interview ends.
-                      This is the part that tells the candidate what they
-                      actually needed to say. */}
+                  {/* The grading key, released only after the interview ends. */}
                   {q.rubric && (
-                    <div style={{ marginTop: "12px", background: "#0a1929", border: "1px solid #1e3a5f", borderRadius: "8px", padding: "12px" }}>
-                      <div style={{ color: "#60a5fa", fontSize: "12px", fontWeight: "600", marginBottom: "8px" }}>
+                    <div className="rounded-lg border border-brand-deep bg-brand-deep/25 p-3">
+                      <div className="mb-2 text-xs font-semibold text-brand">
                         💡 What a strong answer covered
                       </div>
                       {q.rubric
@@ -344,135 +346,129 @@ export default function InterviewPage() {
                         .map((line) => line.replace(/^[-•*]\s*/, "").trim())
                         .filter(Boolean)
                         .map((point, i) => (
-                          <div key={i} style={{ color: "#ccc", fontSize: "13px", lineHeight: "1.6", display: "flex", gap: "8px", marginBottom: "4px" }}>
-                            <span style={{ color: "#60a5fa" }}>•</span>
-                            <span>{point}</span>
+                          <div key={i} className="mb-1 flex gap-2 text-[13px] leading-relaxed text-body">
+                            <span className="text-brand">•</span>
+                            <span className="break-words">{point}</span>
                           </div>
                         ))}
                     </div>
                   )}
-                </div>
+                </Card>
               ))}
             </div>
           )}
 
-          <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-            <button onClick={() => router.push("/interview/new")} style={{ padding: "12px 24px", background: "#2563eb", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}>
-              Practice Again
-            </button>
-            <button onClick={() => router.push("/dashboard")} style={{ padding: "12px 24px", background: "transparent", color: "#ccc", border: "1px solid #333", borderRadius: "8px", cursor: "pointer" }}>
+          <div className="flex flex-col justify-center gap-3 sm:flex-row">
+            <Button onClick={() => router.push("/interview/new")}>Practice Again</Button>
+            <Button variant="ghost" onClick={() => router.push("/dashboard")}>
               Back to Dashboard
-            </button>
+            </Button>
           </div>
         </div>
-      </main>
+      </Page>
     )
   }
 
   return (
-    <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", fontFamily: "Arial" }}>
-      <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 32px", borderBottom: "1px solid #222", flexWrap: "wrap", gap: "12px" }}>
-        <div style={{ color: "#60a5fa", fontSize: "20px", fontWeight: "bold" }}>InterviewAI</div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", padding: "4px", gap: "4px" }}>
-            <button
-              onClick={() => handleModeSwitch("text")}
-              style={{ padding: "8px 20px", borderRadius: "6px", border: "none", cursor: "pointer", fontSize: "14px", fontWeight: "600", background: mode === "text" ? "#2563eb" : "transparent", color: mode === "text" ? "white" : "#888" }}
-            >
-              ✏️ Text
-            </button>
-            <button
-              onClick={() => handleModeSwitch("voice")}
-              style={{ padding: "8px 20px", borderRadius: "6px", border: "none", cursor: "pointer", fontSize: "14px", fontWeight: "600", background: mode === "voice" ? "#2563eb" : "transparent", color: mode === "voice" ? "white" : "#888" }}
-            >
-              🎤 Voice
-            </button>
+    <Page>
+      <nav className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 sm:px-8">
+        <div className="text-xl font-bold text-brand">InterviewAI</div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1 rounded-lg border border-line-2 bg-surface-2 p-1">
+            {(["text", "voice"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => handleModeSwitch(m)}
+                className={`cursor-pointer rounded-md px-4 py-2 text-sm font-semibold transition-colors ${
+                  mode === m ? "bg-brand-strong text-white" : "text-muted hover:text-white"
+                }`}
+              >
+                {m === "text" ? "✏️ Text" : "🎤 Voice"}
+              </button>
+            ))}
           </div>
-          <div style={{ color: "#888", fontSize: "14px" }}>Question {questionNumber} of 5</div>
+          <div className="text-sm text-muted">
+            Question {questionNumber} of {TOTAL_QUESTIONS}
+          </div>
         </div>
       </nav>
 
-      <div style={{ maxWidth: "800px", margin: "0 auto", padding: "40px 32px" }}>
-        <div style={{ background: "#222", borderRadius: "4px", height: "6px", marginBottom: "40px" }}>
-          <div style={{ background: "#2563eb", height: "100%", borderRadius: "4px", width: `${(questionNumber / 5) * 100}%`, transition: "width 0.3s" }} />
+      <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="mb-8 h-1.5 rounded bg-line">
+          <div
+            className="h-full rounded bg-brand-strong transition-all"
+            style={{ width: `${(questionNumber / TOTAL_QUESTIONS) * 100}%` }}
+          />
         </div>
 
-        <div style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "28px", marginBottom: "24px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-            <div style={{ fontSize: "24px" }}>🤖</div>
-            <div style={{ color: "#60a5fa", fontWeight: "600" }}>AI Interviewer</div>
+        <Card className="mb-6">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <div className="text-2xl">🤖</div>
+            <div className="font-semibold text-brand">AI Interviewer</div>
             {/* Signals that this digs into the previous answer rather than
                 opening a new topic, so the pivot does not feel random. */}
-            {isFollowUp && (
-              <div style={{ padding: "3px 10px", borderRadius: "20px", background: "#3b2f0b", border: "1px solid #f59e0b", color: "#fbbf24", fontSize: "11px", fontWeight: "600" }}>
-                ↳ Follow-up
-              </div>
-            )}
+            {isFollowUp && <Badge tone="warn">↳ Follow-up</Badge>}
             {speaking && (
-              <div style={{ display: "flex", gap: "3px", alignItems: "center", marginLeft: "8px" }}>
-                {[1, 2, 3].map((i) => (
-                  <div key={i} style={{ width: "3px", height: `${8 + i * 4}px`, background: "#60a5fa", borderRadius: "2px" }} />
-                ))}
-                <span style={{ color: "#60a5fa", fontSize: "12px", marginLeft: "6px" }}>Speaking...</span>
-              </div>
+              <span className="text-xs text-brand">Speaking...</span>
             )}
           </div>
-          <p style={{ fontSize: "18px", lineHeight: "1.6", color: "#f0f0f0" }}>{question}</p>
+
+          <p className="text-base leading-relaxed break-words text-white/95 sm:text-lg">
+            {question}
+          </p>
+
           {mode === "voice" && (
             <button
               onClick={() => speakQuestion(question)}
-              style={{ marginTop: "12px", padding: "6px 14px", background: "transparent", border: "1px solid #333", color: "#888", borderRadius: "6px", cursor: "pointer", fontSize: "13px" }}
+              className="mt-3 cursor-pointer rounded-md border border-line-2 px-3 py-1.5 text-[13px] text-muted hover:text-white"
             >
               🔊 Replay Question
             </button>
           )}
-        </div>
+        </Card>
 
-        {submitError && (
-          <div style={{ background: "#2d1515", border: "1px solid #ef4444", color: "#ef4444", padding: "12px", borderRadius: "8px", marginBottom: "16px", fontSize: "14px" }}>
-            {submitError}
-          </div>
-        )}
+        {submitError && <Alert>{submitError}</Alert>}
 
         {feedback && (
-          <div style={{ background: "#0f2a0f", border: `1px solid ${scoreColor(feedback.score)}`, borderRadius: "12px", padding: "20px", marginBottom: "24px" }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginBottom: "10px" }}>
-              <div style={{ color: scoreColor(feedback.score), fontWeight: "700", fontSize: "20px" }}>
+          <Card className={`mb-6 bg-good-bg ${scoreBorder(feedback.score)}`}>
+            <div className="mb-2.5 flex flex-wrap items-baseline gap-2.5">
+              <span className={`text-xl font-bold ${scoreText(feedback.score)}`}>
                 {feedback.score}/10
-              </div>
-              <div style={{ color: "#888", fontSize: "13px" }}>Your answer to question {questionNumber}</div>
+              </span>
+              <span className="text-[13px] text-muted">
+                Your answer to question {questionNumber}
+              </span>
             </div>
 
-            <p style={{ color: "#ddd", fontSize: "14px", lineHeight: "1.6", marginBottom: "12px" }}>{feedback.feedback}</p>
+            <p className="mb-3 text-sm leading-relaxed break-words text-white/90">
+              {feedback.feedback}
+            </p>
 
             {feedback.strengths && feedback.strengths.length > 0 && (
-              <div style={{ marginBottom: "10px" }}>
-                <div style={{ color: "#22c55e", fontWeight: "600", fontSize: "12px", marginBottom: "4px" }}>✅ Strengths</div>
-                {feedback.strengths.map((s: string, i: number) => (
-                  <div key={i} style={{ color: "#ccc", fontSize: "13px", lineHeight: "1.6" }}>• {s}</div>
+              <div className="mb-2.5">
+                <div className="mb-1 text-xs font-semibold text-good">✅ Strengths</div>
+                {feedback.strengths.map((s, i) => (
+                  <div key={i} className="text-[13px] leading-relaxed break-words text-body">• {s}</div>
                 ))}
               </div>
             )}
 
             {feedback.improvements && feedback.improvements.length > 0 && (
-              <div style={{ marginBottom: "16px" }}>
-                <div style={{ color: "#f59e0b", fontWeight: "600", fontSize: "12px", marginBottom: "4px" }}>🎯 To improve</div>
-                {feedback.improvements.map((s: string, i: number) => (
-                  <div key={i} style={{ color: "#ccc", fontSize: "13px", lineHeight: "1.6" }}>• {s}</div>
+              <div className="mb-4">
+                <div className="mb-1 text-xs font-semibold text-warn">🎯 To improve</div>
+                {feedback.improvements.map((s, i) => (
+                  <div key={i} className="text-[13px] leading-relaxed break-words text-body">• {s}</div>
                 ))}
               </div>
             )}
 
             {/* Advancing is an explicit choice; the feedback stays until then. */}
             {pendingQuestion && (
-              <button
-                onClick={handleContinue}
-                style={{ width: "100%", padding: "12px", background: "#2563eb", color: "white", border: "none", borderRadius: "8px", fontSize: "15px", fontWeight: "600", cursor: "pointer" }}
-              >
+              <Button full onClick={handleContinue}>
                 {pendingQuestion.isFollowUp ? "Continue to follow-up →" : "Next question →"}
-              </button>
+              </Button>
             )}
-          </div>
+          </Card>
         )}
 
         {!feedback && mode === "text" && (
@@ -482,107 +478,92 @@ export default function InterviewPage() {
               onChange={(e) => setAnswer(e.target.value)}
               placeholder="Type your answer here..."
               rows={6}
-              style={{ width: "100%", padding: "16px", background: "#111", border: "1px solid #333", borderRadius: "12px", color: "white", fontSize: "15px", lineHeight: "1.6", resize: "vertical", outline: "none", boxSizing: "border-box", fontFamily: "Arial" }}
+              className="w-full resize-y rounded-xl border border-line-2 bg-surface p-4 text-[15px] leading-relaxed text-white outline-none placeholder:text-muted focus:border-brand"
             />
-            <button
+            <Button
+              full
               onClick={handleSubmit}
               disabled={loading || !answer.trim()}
-              style={{ marginTop: "16px", width: "100%", padding: "14px", background: loading || !answer.trim() ? "#1d4ed8" : "#2563eb", color: "white", border: "none", borderRadius: "8px", fontSize: "16px", fontWeight: "600", cursor: loading || !answer.trim() ? "not-allowed" : "pointer", opacity: !answer.trim() ? 0.6 : 1 }}
+              className="mt-4"
             >
               {loading ? "Evaluating..." : "Submit Answer →"}
-            </button>
+            </Button>
           </div>
         )}
 
         {!feedback && mode === "voice" && (
           <div>
             {!browserSupportsSpeechRecognition && (
-              <div style={{ background: "#2d1515", border: "1px solid #ef4444", color: "#ef4444", padding: "12px", borderRadius: "8px", marginBottom: "16px", fontSize: "14px" }}>
-                ⚠️ Voice not supported. Please use Chrome.
-              </div>
+              <Alert>⚠️ Voice not supported in this browser. Please use Chrome.</Alert>
             )}
 
-            {countdown !== null && (
-              <div style={{ textAlign: "center", padding: "32px", background: "#111", border: "1px solid #222", borderRadius: "12px", marginBottom: "16px" }}>
-                <div style={{ fontSize: "64px", fontWeight: "bold", color: "#60a5fa" }}>{countdown}</div>
-                <div style={{ color: "#888", marginTop: "8px" }}>Starting microphone...</div>
-              </div>
-            )}
-
-            {countdown === null && (
+            {countdown !== null ? (
+              <Card className="text-center">
+                <div className="text-5xl font-bold text-brand">{countdown}</div>
+                <div className="mt-2 text-muted">Starting microphone...</div>
+              </Card>
+            ) : (
               <div>
-                <div style={{ background: "#111", border: `1px solid ${listening ? "#22c55e" : "#333"}`, borderRadius: "12px", padding: "24px", marginBottom: "16px", textAlign: "center" }}>
+                <Card className={`mb-4 text-center ${listening ? "border-good" : ""}`}>
                   {listening ? (
                     <div>
-                      <div style={{ display: "flex", justifyContent: "center", gap: "4px", marginBottom: "16px" }}>
-                        {[1, 2, 3, 4, 5].map((i) => (
-                          <div key={i} style={{ width: "4px", height: "24px", background: "#22c55e", borderRadius: "2px" }} />
-                        ))}
-                      </div>
-                      <div style={{ color: "#22c55e", fontWeight: "600", marginBottom: "8px" }}>🎤 Listening...</div>
-                      <div style={{ color: "#ccc", fontSize: "14px", minHeight: "60px", lineHeight: "1.6", textAlign: "left", background: "#0a0a0a", padding: "12px", borderRadius: "8px" }}>
+                      <div className="mb-2 font-semibold text-good">🎤 Listening...</div>
+                      <div className="min-h-16 rounded-lg bg-ink p-3 text-left text-sm leading-relaxed break-words text-body">
                         {transcript || "Start speaking..."}
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <div style={{ fontSize: "48px", marginBottom: "12px" }}>🎤</div>
-                      <div style={{ color: "#888", fontSize: "14px" }}>
-                        {answer ? "Recording stopped. Review your answer below." : "Click the button to start speaking"}
+                      <div className="mb-3 text-5xl">🎤</div>
+                      <div className="text-sm text-muted">
+                        {answer
+                          ? "Recording stopped. Review your answer below."
+                          : "Click the button to start speaking"}
                       </div>
                     </div>
                   )}
-                </div>
+                </Card>
 
                 {answer && !listening && (
-                  <div style={{ background: "#111", border: "1px solid #333", borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
-                    <div style={{ color: "#888", fontSize: "12px", marginBottom: "8px" }}>Your Answer:</div>
-                    <p style={{ color: "#ccc", fontSize: "14px", lineHeight: "1.6" }}>{answer}</p>
+                  <Card className="mb-4">
+                    <div className="mb-2 text-xs text-muted">Your Answer:</div>
+                    <p className="text-sm leading-relaxed break-words text-body">{answer}</p>
                     <button
-                      onClick={() => { resetTranscript(); setAnswer("") }}
-                      style={{ marginTop: "8px", padding: "4px 12px", background: "transparent", border: "1px solid #333", color: "#888", borderRadius: "6px", cursor: "pointer", fontSize: "12px" }}
+                      onClick={() => {
+                        resetTranscript()
+                        setAnswer("")
+                      }}
+                      className="mt-2 cursor-pointer rounded-md border border-line-2 px-3 py-1 text-xs text-muted hover:text-white"
                     >
-                      🗑️ Clear & Re-record
+                      🗑️ Clear &amp; Re-record
                     </button>
-                  </div>
+                  </Card>
                 )}
 
-                <div style={{ display: "flex", gap: "12px" }}>
+                {/* Stacks on phones so both controls stay tappable. */}
+                <div className="flex flex-col gap-3 sm:flex-row">
                   {!listening ? (
-                    <button
-                      onClick={handleStartListening}
-                      style={{ flex: 1, padding: "14px", background: "#14532d", border: "1px solid #22c55e", color: "#22c55e", borderRadius: "8px", fontSize: "16px", fontWeight: "600", cursor: "pointer" }}
-                    >
+                    <Button variant="success" full onClick={handleStartListening}>
                       🎤 Start Speaking
-                    </button>
+                    </Button>
                   ) : (
-                    <button
-                      onClick={handleStopListening}
-                      style={{ flex: 1, padding: "14px", background: "#2d1515", border: "1px solid #ef4444", color: "#ef4444", borderRadius: "8px", fontSize: "16px", fontWeight: "600", cursor: "pointer" }}
-                    >
+                    <Button variant="danger" full onClick={() => SpeechRecognition.stopListening()}>
                       ⏹️ Stop Recording
-                    </button>
+                    </Button>
                   )}
-                  <button
+                  <Button
+                    full
                     onClick={handleSubmit}
                     disabled={loading || !answer.trim() || listening}
-                    style={{ flex: 1, padding: "14px", background: loading || !answer.trim() || listening ? "#1a1a1a" : "#2563eb", color: loading || !answer.trim() || listening ? "#555" : "white", border: "1px solid #333", borderRadius: "8px", fontSize: "16px", fontWeight: "600", cursor: loading || !answer.trim() || listening ? "not-allowed" : "pointer" }}
                   >
                     {loading ? "Evaluating..." : "Submit Answer →"}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
           </div>
         )}
       </div>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { transform: scaleY(1); }
-          50% { transform: scaleY(1.5); }
-        }
-      `}</style>
-    </main>
+    </Page>
   )
 }

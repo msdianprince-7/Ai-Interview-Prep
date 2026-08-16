@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { Alert, Button, Card, Field, Page } from "@/components/ui/shell"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -48,84 +49,63 @@ export default function RegisterPage() {
   }
 
   return (
-    <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "white", fontFamily: "Arial", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: "100%", maxWidth: "400px", padding: "0 16px" }}>
-
-        <div style={{ textAlign: "center", marginBottom: "32px" }}>
-          <Link href="/" style={{ color: "#60a5fa", fontSize: "24px", fontWeight: "bold", textDecoration: "none" }}>
+    <Page center>
+      <div className="w-full max-w-sm px-4 py-10">
+        <div className="mb-8 text-center">
+          <Link href="/" className="text-2xl font-bold text-brand">
             InterviewAI
           </Link>
-          <h1 style={{ fontSize: "24px", fontWeight: "bold", marginTop: "16px" }}>Create account</h1>
-          <p style={{ color: "#888", marginTop: "8px" }}>Start practicing interviews for free</p>
+          <h1 className="mt-4 text-2xl font-bold">Create account</h1>
+          <p className="mt-2 text-muted">Start practicing interviews for free</p>
         </div>
 
-        <div style={{ background: "#111", border: "1px solid #222", borderRadius: "12px", padding: "32px" }}>
-          {error && (
-            <div style={{ background: "#2d1515", border: "1px solid #ef4444", color: "#ef4444", padding: "12px", borderRadius: "8px", marginBottom: "16px", fontSize: "14px" }}>
-              {error}
-            </div>
-          )}
+        <Card>
+          {error && <Alert>{error}</Alert>}
 
           <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: "16px" }}>
-              <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", color: "#ccc" }}>
-                Full Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                placeholder="John Doe"
-                style={{ width: "100%", padding: "10px 12px", background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "white", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
-              />
-            </div>
+            <Field
+              label="Full Name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoComplete="name"
+              placeholder="Jane Doe"
+            />
 
-            <div style={{ marginBottom: "16px" }}>
-              <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", color: "#ccc" }}>
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@example.com"
-                style={{ width: "100%", padding: "10px 12px", background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "white", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
-              />
-            </div>
+            <Field
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              placeholder="you@example.com"
+            />
 
-            <div style={{ marginBottom: "24px" }}>
-              <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", color: "#ccc" }}>
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Min 8 characters, letters and numbers"
-                style={{ width: "100%", padding: "10px 12px", background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "white", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
-              />
-            </div>
+            <Field
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+              placeholder="Min 8 characters, letters and numbers"
+            />
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={{ width: "100%", padding: "12px", background: loading ? "#1d4ed8" : "#2563eb", color: "white", border: "none", borderRadius: "8px", fontSize: "16px", fontWeight: "600", cursor: loading ? "not-allowed" : "pointer" }}
-            >
+            <Button type="submit" full disabled={loading} className="mt-2">
               {loading ? "Creating account..." : "Create Account"}
-            </button>
+            </Button>
           </form>
-        </div>
+        </Card>
 
-        <p style={{ textAlign: "center", marginTop: "24px", color: "#888", fontSize: "14px" }}>
+        <p className="mt-6 text-center text-sm text-muted">
           Already have an account?{" "}
-          <a href="/login" style={{ color: "#60a5fa", textDecoration: "none" }}>
+          <Link href="/login" className="text-brand hover:underline">
             Sign in
-          </a>
+          </Link>
         </p>
       </div>
-    </main>
+    </Page>
   )
 }
