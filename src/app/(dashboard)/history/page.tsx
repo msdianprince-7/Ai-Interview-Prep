@@ -52,16 +52,22 @@ export default function HistoryPage() {
   const [interviews, setInterviews] = useState<Interview[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch("/api/interviews")
-      .then((res) => res.json())
-      .then((data) => {
-        setInterviews(data.interviews || [])
-        setLoading(false)
+      .then(async (res) => {
+        if (res.status === 401) {
+          router.push("/login")
+          return
+        }
+        const data = await res.json()
+        if (!res.ok) throw new Error(data?.error || "Failed to load interviews")
+        setInterviews(Array.isArray(data.interviews) ? data.interviews : [])
       })
-      .catch(() => setLoading(false))
-  }, [])
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load interviews"))
+      .finally(() => setLoading(false))
+  }, [router])
 
   if (loading) return <Spinner label="Loading history..." />
 
@@ -77,12 +83,20 @@ export default function HistoryPage() {
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="mb-2 text-2xl font-bold sm:text-3xl">Interview History</h1>
-            <p className="text-muted">{interviews.length} total interviews</p>
+            <p className="text-muted">
+              {interviews.length} total interview{interviews.length === 1 ? "" : "s"}
+            </p>
           </div>
           <Button onClick={() => router.push("/interview/new")}>+ New Interview</Button>
         </div>
 
-        {interviews.length === 0 ? (
+        {error ? (
+          <EmptyState
+            icon="⚠️"
+            title={error}
+            action={<Button onClick={() => window.location.reload()}>Retry</Button>}
+          />
+        ) : interviews.length === 0 ? (
           <EmptyState
             icon="📋"
             title="No interviews yet"
@@ -146,6 +160,9 @@ export default function HistoryPage() {
                     <div className="border-t border-line p-5">
                       <h3 className="mb-4 font-semibold text-body">Questions &amp; Answers</h3>
                       <div className="flex flex-col gap-4">
+                        {(interview.questions ?? []).length === 0 && (
+                          <p className="text-sm text-muted">No questions recorded yet.</p>
+                        )}
                         {interview.questions?.map((q, index) => (
                           <Card key={q.id} className="bg-ink">
                             <div className="mb-3 flex items-start justify-between gap-3">

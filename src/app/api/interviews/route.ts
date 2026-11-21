@@ -22,6 +22,7 @@ export async function GET() {
             score: true,
             feedback: true,
             order: true,
+            isFollowUp: true,
           },
         },
       },

@@ -19,7 +19,7 @@ interface Interview {
   status: string
   score: number | null
   createdAt: string
-  questions: { score: number | null }[]
+  questions: { score: number | null; answer: string | null }[]
 }
 
 function scoreColor(score: number) {
@@ -40,35 +40,50 @@ export default function AnalyticsPage() {
   const router = useRouter()
   const [interviews, setInterviews] = useState<Interview[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch("/api/interviews")
-      .then((res) => res.json())
-      .then((data) => {
-        setInterviews(data.interviews || [])
-        setLoading(false)
+      .then(async (res) => {
+        if (res.status === 401) {
+          router.push("/login")
+          return
+        }
+        const data = await res.json()
+        if (!res.ok) throw new Error(data?.error || "Failed to load interviews")
+        setInterviews(Array.isArray(data.interviews) ? data.interviews : [])
       })
-      .catch(() => setLoading(false))
-  }, [])
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load interviews"))
+      .finally(() => setLoading(false))
+  }, [router])
 
   const completed = interviews.filter((i) => i.status === "completed")
-  const avgScore = completed.length
-    ? Math.round(completed.reduce((a, b) => a + (b.score || 0), 0) / completed.length)
-    : 0
-  const bestScore = completed.length ? Math.max(...completed.map((i) => i.score || 0)) : 0
-  const totalQuestions = interviews.reduce((a, b) => a + b.questions.length, 0)
+  // Only interviews that actually received a score count towards averages;
+  // treating a missing score as 0 dragged every average down.
+  const scored = completed.filter((i): i is Interview & { score: number } => i.score !== null)
+  const avgScore = scored.length
+    ? Math.round(scored.reduce((a, b) => a + b.score, 0) / scored.length)
+    : null
+  const bestScore = scored.length ? Math.max(...scored.map((i) => i.score)) : null
+  // Count answered questions only — the card is "Questions Answered".
+  const totalQuestions = interviews.reduce(
+    (a, b) => a + (b.questions ?? []).filter((q) => q.answer !== null && q.answer !== "").length,
+    0
+  )
 
-  const scoreHistory = completed.slice(-7).map((i) => ({
+  // The API returns newest first. Take the 7 most recent scored interviews
+  // and show them oldest → newest so the chart reads left-to-right in time.
+  const scoreHistory = scored.slice(0, 7).reverse().map((i) => ({
     date: new Date(i.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    score: i.score || 0,
+    score: i.score,
   }))
 
   const groupAverages = (key: "role" | "difficulty") => {
     const map: Record<string, number[]> = {}
-    completed.forEach((i) => {
+    scored.forEach((i) => {
       const k = i[key]
       if (!map[k]) map[k] = []
-      map[k].push(i.score || 0)
+      map[k].push(i.score)
     })
     return Object.entries(map).map(([label, scores]) => ({
       label,
@@ -85,8 +100,8 @@ export default function AnalyticsPage() {
   const stats = [
     { label: "Total Interviews", value: interviews.length, icon: "🎯", tone: "text-brand" },
     { label: "Completed", value: completed.length, icon: "✅", tone: "text-good" },
-    { label: "Average Score", value: avgScore ? `${avgScore}/10` : "N/A", icon: "📊", tone: scoreColor(avgScore) },
-    { label: "Best Score", value: bestScore ? `${bestScore}/10` : "N/A", icon: "🏆", tone: "text-warn" },
+    { label: "Average Score", value: avgScore !== null ? `${avgScore}/10` : "N/A", icon: "📊", tone: avgScore !== null ? scoreColor(avgScore) : "text-muted" },
+    { label: "Best Score", value: bestScore !== null ? `${bestScore}/10` : "N/A", icon: "🏆", tone: "text-warn" },
   ]
 
   return (
@@ -103,7 +118,13 @@ export default function AnalyticsPage() {
           <p className="text-muted">Track your interview performance over time</p>
         </div>
 
-        {interviews.length === 0 ? (
+        {error ? (
+          <EmptyState
+            icon="⚠️"
+            title={error}
+            action={<Button onClick={() => window.location.reload()}>Retry</Button>}
+          />
+        ) : interviews.length === 0 ? (
           <EmptyState
             icon="📊"
             title="No data yet. Complete some interviews first!"
